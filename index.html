@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Family Race Timer</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--ink:#1d2430;--muted:#6b7585;--accent:#1f6feb;--go:#2da44e;--stop:#d1242f;--line:#dde2e8;--gold:#c99a06;--silver:#8b949e;--bronze:#b5651d}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--ink);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{font-size:20px;margin:0}
+main{max-width:860px;margin:0 auto;padding:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}
+h2{font-size:18px;margin:0 0 12px}
+h3{font-size:15px;margin:0 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+button{font:inherit;border:0;border-radius:8px;padding:10px 16px;cursor:pointer;background:var(--accent);color:#fff}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.secondary{background:#e6eaf0;color:var(--ink)}
+button.go{background:var(--go);font-size:20px;padding:16px 28px}
+button.stop{background:var(--stop)}
+button.small{padding:6px 10px;font-size:14px}
+button.ghost{background:transparent;color:var(--stop);border:1px solid var(--stop)}
+button.stop-link{background:none;color:var(--muted);text-decoration:underline;padding:6px 8px;font-size:14px;font-weight:400}
+button.stop-big{background:var(--stop);font-size:20px;padding:16px 28px}
+input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width:100%}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.add-form{display:grid;grid-template-columns:1fr 120px auto;gap:8px;margin-bottom:12px}
+.msg{color:var(--stop);min-height:20px;font-size:14px;margin:8px 0 0}
+.list{list-style:none;padding:0;margin:0}
+.list li{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.list li:last-child{border-bottom:0}
+.bib{background:var(--ink);color:#fff;border-radius:6px;padding:4px 9px;font-weight:700;min-width:48px;text-align:center}
+.name{flex:1;font-size:17px}
+.empty{color:var(--muted);font-size:14px;padding:6px 0}
+.clock{font-size:72px;font-weight:700;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:.02em;margin:8px 0 16px}
+.place{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;background:var(--muted);flex:none}
+.place.p1{background:var(--gold)}
+.place.p2{background:var(--silver)}
+.place.p3{background:var(--bronze)}
+.time{font-variant-numeric:tabular-nums;font-size:18px;font-weight:600}
+.hidden{display:none!important}
+.sub{color:var(--muted);font-size:14px;margin:0 0 12px}
+@media (max-width:600px){.add-form{grid-template-columns:1fr 90px}.add-form button{grid-column:1/-1}.clock{font-size:52px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Family Race Timer</h1>
+  <div id="headerInfo" class="row"></div>
+</header>
+
+<main>
+  <p id="storageNote" class="msg hidden">This browser is blocking saved data, so keep this tab open. A refresh will clear the race.</p>
+  <!-- SETUP VIEW: create the event and register racers -->
+  <section id="setupView">
+    <div class="card">
+      <h2>1. Name the event</h2>
+      <input id="eventName" placeholder="e.g. Backyard Sprint 2026" maxlength="80">
+    </div>
+
+    <div class="card">
+      <h2>2. Register racers</h2>
+      <form id="addForm" class="add-form" autocomplete="off">
+        <input id="racerName" placeholder="Racer name" maxlength="40" aria-label="Racer name">
+        <input id="racerBib" placeholder="Bib #" maxlength="8" aria-label="Bib number" inputmode="numeric">
+        <button type="submit">Add racer</button>
+      </form>
+      <p id="setupMsg" class="msg"></p>
+      <ul id="racerList" class="list"></ul>
+      <p id="noRacers" class="empty">No racers yet. Add at least one to continue.</p>
+    </div>
+
+    <div class="row">
+      <button id="goRaceBtn" disabled>Continue to race &rarr;</button>
+    </div>
+  </section>
+
+  <!-- RACE VIEW: overall start timer and finish buttons -->
+  <section id="raceView" class="hidden">
+    <div class="card">
+      <div class="clock" id="clock">0:00.0</div>
+      <div class="row" style="justify-content:center">
+        <button id="startBtn" class="go">Start race</button>
+      </div>
+      <p id="raceHint" class="sub" style="text-align:center;margin-top:12px">Press <b>Finish</b> next to each racer as they cross the line.</p>
+      <p id="raceStatus" class="sub" style="text-align:center;font-weight:600"></p>
+      <div class="row" style="justify-content:center">
+        <button id="stopBtn" class="stop-link hidden">Stop race</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Results</h2>
+      <ul id="resultsList" class="list"></ul>
+      <p id="noResults" class="empty">Nobody has finished yet.</p>
+    </div>
+
+    <div class="card">
+      <h2 id="runningTitle">Still on course</h2>
+      <ul id="runningList" class="list"></ul>
+      <p id="noRunning" class="empty"></p>
+    </div>
+
+    <div class="row">
+      <button id="editBtn" class="secondary">&larr; Edit racers</button>
+      <button id="csvBtn" class="secondary">Download results (CSV)</button>
+      <button id="resetRaceBtn" class="ghost">Reset race times</button>
+      <button id="newEventBtn" class="ghost">New event</button>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var KEY = 'family-race-timer-v1';
+
+  var state = load() || {
+    name: '',
+    racers: [],      // [{ id, name, bib }]
+    view: 'setup',   // 'setup' or 'race'
+    startedAt: null, // epoch ms when the overall start timer was pressed
+    stoppedAt: null, // epoch ms when the race was stopped (freezes the clock)
+    finishes: {}     // { racerId: elapsedMs }
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---------- storage ----------
+  function load() {
+    try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; }
+  }
+  // Saving is best-effort: if the browser blocks storage, the race still works
+  // in this open tab, it just will not survive a reload.
+  function save() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(state));
+    } catch (e) {
+      $('storageNote').classList.remove('hidden');
+    }
+  }
+
+  // ---------- helpers ----------
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  // ms -> "m:ss.t" (or "h:mm:ss.t" past an hour)
+  function fmt(ms) {
+    var tenths = Math.floor(ms / 100);
+    var t = tenths % 10;
+    var totalSec = Math.floor(tenths / 10);
+    var s = totalSec % 60;
+    var m = Math.floor(totalSec / 60) % 60;
+    var h = Math.floor(totalSec / 3600);
+    return h ? h + ':' + pad(m) + ':' + pad(s) + '.' + t : m + ':' + pad(s) + '.' + t;
+  }
+  function elapsed() {
+    if (!state.startedAt) return 0;
+    return (state.stoppedAt || Date.now()) - state.startedAt;
+  }
+  function started() { return !!state.startedAt; }
+  function stopped() { return !!state.stoppedAt; }
+
+  // Finished racers, fastest first, with places
+  function standings() {
+    return state.racers
+      .filter(function (r) { return state.finishes[r.id] != null; })
+      .map(function (r) { return { racer: r, ms: state.finishes[r.id] }; })
+      .sort(function (a, b) { return a.ms - b.ms; });
+  }
+
+  // ---------- setup view ----------
+  function renderSetup() {
+    $('eventName').value = state.name;
+    var list = $('racerList');
+    list.innerHTML = state.racers.map(function (r) {
+      return '<li><span class="bib">#' + esc(r.bib) + '</span>' +
+             '<span class="name">' + esc(r.name) + '</span>' +
+             '<button class="small ghost" data-remove="' + r.id + '">Remove</button></li>';
+    }).join('');
+    $('noRacers').classList.toggle('hidden', state.racers.length > 0);
+    $('goRaceBtn').disabled = state.racers.length === 0;
+  }
+
+  $('eventName').addEventListener('input', function () {
+    state.name = this.value;
+    save();
+  });
+
+  $('addForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var name = $('racerName').value.trim();
+    var bib = $('racerBib').value.trim();
+    var msg = '';
+    if (!name) msg = 'Please enter a racer name.';
+    else if (!bib) msg = 'Please enter a bib number.';
+    else if (state.racers.some(function (r) { return r.bib.toLowerCase() === bib.toLowerCase(); })) {
+      msg = 'Bib #' + bib + ' is already taken.';
+    }
+    $('setupMsg').textContent = msg;
+    if (msg) return;
+
+    state.racers.push({ id: uid(), name: name, bib: bib });
+    $('racerName').value = '';
+    $('racerBib').value = '';
+    $('racerName').focus();
+    renderSetup();
+    save();
+  });
+
+  $('racerList').addEventListener('click', function (e) {
+    var id = e.target.getAttribute('data-remove');
+    if (!id) return;
+    state.racers = state.racers.filter(function (r) { return r.id !== id; });
+    delete state.finishes[id];
+    save();
+    renderSetup();
+  });
+
+  $('goRaceBtn').addEventListener('click', function () {
+    state.view = 'race';
+    save();
+    showView();
+  });
+
+  // ---------- race view ----------
+  function renderRace() {
+    var name = state.name || 'Race';
+    $('headerInfo').innerHTML = '<span>' + esc(name) + '</span>';
+    $('startBtn').disabled = started();
+    $('startBtn').textContent = started() ? 'Race started' : 'Start race';
+    $('editBtn').classList.toggle('hidden', started());
+
+    var done = standings();
+    var doneIds = {};
+    done.forEach(function (d) { doneIds[d.racer.id] = true; });
+
+    // Stop button: faint link while racers are still out, big button once everyone has finished
+    var allDone = state.racers.length > 0 && state.racers.every(function (r) { return state.finishes[r.id] != null; });
+    var stopBtn = $('stopBtn');
+    stopBtn.classList.toggle('hidden', !started() || stopped());
+    stopBtn.classList.toggle('stop-big', allDone);
+    stopBtn.classList.toggle('stop-link', !allDone);
+    $('raceStatus').textContent = stopped() ? 'Race stopped. Results are final.' : '';
+    $('raceHint').classList.toggle('hidden', stopped());
+    $('runningTitle').textContent = stopped() ? 'Did not finish' : 'Still on course';
+
+    // Results with places
+    $('resultsList').innerHTML = done.map(function (d, i) {
+      var place = i + 1;
+      var cls = place <= 3 ? ' p' + place : '';
+      return '<li><span class="place' + cls + '">' + place + '</span>' +
+             '<span class="bib">#' + esc(d.racer.bib) + '</span>' +
+             '<span class="name">' + esc(d.racer.name) + '</span>' +
+             '<span class="time">' + fmt(d.ms) + '</span>' +
+             '<button class="small secondary" data-undo="' + d.racer.id + '">Undo</button></li>';
+    }).join('');
+    $('noResults').classList.toggle('hidden', done.length > 0);
+
+    // Racers still running, with Finish buttons
+    var running = state.racers.filter(function (r) { return !doneIds[r.id]; });
+    $('runningList').innerHTML = running.map(function (r) {
+      return '<li><span class="bib">#' + esc(r.bib) + '</span>' +
+             '<span class="name">' + esc(r.name) + '</span>' +
+             '<button class="stop" data-finish="' + r.id + '"' + (started() && !stopped() ? '' : ' disabled') + '>Finish</button></li>';
+    }).join('');
+    $('noRunning').textContent = running.length ? '' : 'Everyone has finished.';
+    $('noRunning').classList.toggle('hidden', running.length > 0);
+
+    updateClock();
+  }
+
+  function updateClock() {
+    $('clock').textContent = fmt(elapsed());
+  }
+
+  $('startBtn').addEventListener('click', function () {
+    if (started()) return;
+    state.startedAt = Date.now();
+    save();
+    renderRace();
+  });
+
+  $('runningList').addEventListener('click', function (e) {
+    var id = e.target.getAttribute('data-finish');
+    if (!id || !started() || stopped() || state.finishes[id] != null) return;
+    state.finishes[id] = elapsed();
+    save();
+    renderRace();
+  });
+
+  $('stopBtn').addEventListener('click', function () {
+    if (!started() || stopped()) return;
+    var pending = state.racers.filter(function (r) { return state.finishes[r.id] == null; }).length;
+    var msg = pending
+      ? pending + (pending === 1 ? ' racer has' : ' racers have') +
+        ' not finished. If you stop now, they will be marked as Did Not Finish (DNF). Stop the race?'
+      : 'Everyone has finished. Stop the race and lock in the results?';
+    if (!confirm(msg)) return;
+    state.stoppedAt = Date.now();
+    save();
+    renderRace();
+  });
+
+  $('resultsList').addEventListener('click', function (e) {
+    var id = e.target.getAttribute('data-undo');
+    if (!id) return;
+    delete state.finishes[id];
+    save();
+    renderRace();
+  });
+
+  $('editBtn').addEventListener('click', function () {
+    state.view = 'setup';
+    save();
+    showView();
+  });
+
+  $('resetRaceBtn').addEventListener('click', function () {
+    if (!confirm('Reset the clock and clear all finish times? Racers will stay registered.')) return;
+    state.startedAt = null;
+    state.stoppedAt = null;
+    state.finishes = {};
+    save();
+    renderRace();
+  });
+
+  $('newEventBtn').addEventListener('click', function () {
+    if (!confirm('Start a brand-new event? This erases the current racers and times.')) return;
+    state = { name: '', racers: [], view: 'setup', startedAt: null, stoppedAt: null, finishes: {} };
+    save();
+    $('racerName').value = '';
+    $('racerBib').value = '';
+    $('setupMsg').textContent = '';
+    showView();
+  });
+
+  $('csvBtn').addEventListener('click', function () {
+    var rows = [['Place', 'Bib', 'Name', 'Time']];
+    standings().forEach(function (d, i) {
+      rows.push([i + 1, d.racer.bib, d.racer.name, fmt(d.ms)]);
+    });
+    state.racers.forEach(function (r) {
+      if (state.finishes[r.id] == null) rows.push(['DNF', r.bib, r.name, '']);
+    });
+    var csv = rows.map(function (row) {
+      return row.map(function (cell) {
+        return '"' + String(cell).replace(/"/g, '""') + '"';
+      }).join(',');
+    }).join('\r\n');
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = (state.name || 'race-results').replace(/[^\w\- ]+/g, '') + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
+
+  // ---------- views ----------
+  function showView() {
+    var raceMode = state.view === 'race';
+    $('setupView').classList.toggle('hidden', raceMode);
+    $('raceView').classList.toggle('hidden', !raceMode);
+    $('headerInfo').innerHTML = '';
+    if (raceMode) renderRace(); else renderSetup();
+  }
+
+  // Clock keeps running from the saved start time, so a page reload does not lose it
+  setInterval(updateClock, 100);
+
+  showView();
+})();
+</script>
+</body>
+</html>
