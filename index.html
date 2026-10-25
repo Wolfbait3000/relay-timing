@@ -23,6 +23,7 @@ button.small{padding:6px 10px;font-size:14px}
 button.ghost{background:transparent;color:var(--stop);border:1px solid var(--stop)}
 button.stop-link{background:none;color:var(--muted);text-decoration:underline;padding:6px 8px;font-size:14px;font-weight:400}
 button.stop-big{background:var(--stop);font-size:20px;padding:16px 28px}
+body.viewer .timekeeper-only,body.viewer [data-finish],body.viewer [data-undo]{display:none!important}
 input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width:100%}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .add-form{display:grid;grid-template-columns:1fr 120px auto;gap:8px;margin-bottom:12px}
@@ -51,6 +52,7 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
 </header>
 
 <main>
+  <p id="syncNote" class="msg hidden"></p>
   <p id="storageNote" class="msg hidden">This browser is blocking saved data, so keep this tab open. A refresh will clear the race.</p>
   <!-- SETUP VIEW: create the event and register racers -->
   <section id="setupView">
@@ -71,6 +73,12 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
       <p id="noRacers" class="empty">No racers yet. Add at least one to continue.</p>
     </div>
 
+    <div class="card" id="pinCard">
+      <h2>3. Timekeeper PIN</h2>
+      <p class="sub">Family can see the results from the share link. Anyone with this PIN can change times, so keep it to yourself.</p>
+      <input id="pinInput" placeholder="At least 4 characters" maxlength="20" autocomplete="off">
+    </div>
+
     <div class="row">
       <button id="goRaceBtn" disabled>Continue to race &rarr;</button>
     </div>
@@ -81,12 +89,13 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
     <div class="card">
       <div class="clock" id="clock">0:00.0</div>
       <div class="row" style="justify-content:center">
-        <button id="startBtn" class="go">Start race</button>
+        <button id="startBtn" class="go timekeeper-only">Start race</button>
       </div>
       <p id="raceHint" class="sub" style="text-align:center;margin-top:12px">Press <b>Finish</b> next to each racer as they cross the line.</p>
       <p id="raceStatus" class="sub" style="text-align:center;font-weight:600;margin:18px 0 12px"></p>
+      <p id="shareBox" class="sub hidden" style="text-align:center">Share this link with family: <b id="shareLink" style="word-break:break-all"></b></p>
       <div class="row" style="justify-content:center">
-        <button id="stopBtn" class="stop-link hidden">Stop race</button>
+        <button id="stopBtn" class="stop-link hidden timekeeper-only">Stop race</button>
       </div>
     </div>
 
@@ -103,10 +112,10 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
     </div>
 
     <div class="row">
-      <button id="editBtn" class="secondary">&larr; Edit racers</button>
+      <button id="editBtn" class="secondary timekeeper-only">&larr; Edit racers</button>
       <button id="csvBtn" class="secondary">Download results (CSV)</button>
-      <button id="resetRaceBtn" class="ghost">Reset race times</button>
-      <button id="newEventBtn" class="ghost">New event</button>
+      <button id="resetRaceBtn" class="ghost timekeeper-only">Reset race times</button>
+      <button id="newEventBtn" class="ghost timekeeper-only">New event</button>
     </div>
   </section>
 </main>
@@ -123,8 +132,15 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
     view: 'setup',   // 'setup' or 'race'
     startedAt: null, // epoch ms when the overall start timer was pressed
     stoppedAt: null, // epoch ms when the race was stopped (freezes the clock)
-    finishes: {}     // { racerId: elapsedMs }
+    finishes: {},    // { racerId: elapsedMs }
+    raceId: null,    // shared race id from Netlify, if this device created or joined one
+    pin: ''          // timekeeper PIN, kept only on the timekeeper's device
   };
+
+  // Viewer mode: opened from a share link (?race=ID). Read-only, refreshes from the server.
+  var params = new URLSearchParams(location.search);
+  var viewRaceId = params.get('race');
+  if (viewRaceId) document.body.classList.add('viewer');
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -135,12 +151,89 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
   // Saving is best-effort: if the browser blocks storage, the race still works
   // in this open tab, it just will not survive a reload.
   function save() {
+    if (viewRaceId) return;
     try {
       localStorage.setItem(KEY, JSON.stringify(state));
     } catch (e) {
       $('storageNote').classList.remove('hidden');
     }
+    pushShared();
   }
+
+  // ---------- shared results (Netlify Function) ----------
+  var API = '/.netlify/functions/race';
+  var pushTimer = null;
+  var lastPushed = '';
+
+  function setSync(text) {
+    var el = $('syncNote');
+    el.textContent = text;
+    el.classList.toggle('hidden', !text);
+  }
+
+  // Timekeeper: send the latest state to the server, at most once every half second
+  function pushShared() {
+    if (!state.raceId || !state.pin || viewRaceId) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(function () {
+      var body = JSON.stringify({ id: state.raceId, pin: state.pin, state: stateForShare() });
+      if (body === lastPushed) return;
+      fetch(API, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: body })
+        .then(function (res) {
+          if (res.status === 403) return setSync('Wrong timekeeper PIN. Results are not being shared.');
+          if (!res.ok) return setSync('Could not share results. They are still saved on this device.');
+          lastPushed = body;
+          setSync('');
+        })
+        .catch(function () { setSync('No internet. Results will share when the connection is back.'); });
+    }, 500);
+  }
+
+  // Only the race data is shared, never the PIN
+  function stateForShare() {
+    return { name: state.name, racers: state.racers, startedAt: state.startedAt, stoppedAt: state.stoppedAt, finishes: state.finishes };
+  }
+
+  // Creates a shared race on the server and returns its id
+  function createShared(pin) {
+    return fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'create', pin: pin, state: stateForShare() })
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok) throw new Error(data.error || 'Could not create race');
+        return data.id;
+      });
+    });
+  }
+
+  // Viewer: load the race from the server and keep it fresh
+  function loadViewer() {
+    function poll() {
+      fetch(API + '?id=' + encodeURIComponent(viewRaceId), { cache: 'no-store' })
+        .then(function (res) {
+          if (!res.ok) throw new Error('Race not found');
+          return res.json();
+        })
+        .then(function (data) {
+          state.name = data.state.name;
+          state.racers = data.state.racers;
+          state.startedAt = data.state.startedAt;
+          state.stoppedAt = data.state.stoppedAt;
+          state.finishes = data.state.finishes;
+          state.view = 'race';
+          $('setupView').classList.add('hidden');
+          $('raceView').classList.remove('hidden');
+          renderRace();
+          setSync('Live view. Refreshes every few seconds.');
+        })
+        .catch(function () { setSync('Could not load this race. Check the link.'); });
+    }
+    poll();
+    setInterval(poll, 3000);
+  }
+
 
   // ---------- helpers ----------
   function uid() {
@@ -226,10 +319,35 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
   });
 
   $('goRaceBtn').addEventListener('click', function () {
-    state.view = 'race';
-    save();
-    showView();
+    if (state.raceId) {
+      state.view = 'race';
+      save();
+      showView();
+      return;
+    }
+    var pin = $('pinInput').value.trim();
+    if (pin.length < 4) {
+      $('setupMsg').textContent = 'Enter a timekeeper PIN of at least 4 characters first.';
+      $('pinInput').focus();
+      return;
+    }
+    $('goRaceBtn').disabled = true;
+    $('setupMsg').textContent = 'Creating the shared race...';
+    createShared(pin).then(function (id) {
+      state.raceId = id;
+      state.pin = pin;
+      state.view = 'race';
+      save();
+      showView();
+    }).catch(function (err) {
+      $('goRaceBtn').disabled = false;
+      $('setupMsg').textContent = 'Could not create the shared race: ' + err.message + '. Check the internet connection and try again.';
+    });
   });
+
+  function shareUrl() {
+    return location.origin + location.pathname + '?race=' + state.raceId;
+  }
 
   // ---------- race view ----------
   function renderRace() {
@@ -252,6 +370,8 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
     $('raceStatus').textContent = stopped() ? 'Race stopped. Results are final.' : '';
     $('raceHint').classList.toggle('hidden', stopped());
     $('runningTitle').textContent = stopped() ? 'Did not finish' : 'Still on course';
+    $('shareBox').classList.toggle('hidden', !state.raceId || !!viewRaceId);
+    $('shareLink').textContent = state.raceId ? shareUrl() : '';
 
     // Results with places
     $('resultsList').innerHTML = done.map(function (d, i) {
@@ -376,7 +496,12 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
   // Clock keeps running from the saved start time, so a page reload does not lose it
   setInterval(updateClock, 100);
 
-  showView();
+  if (viewRaceId) {
+    $('headerInfo').innerHTML = '<span>Live results</span>';
+    loadViewer();
+  } else {
+    showView();
+  }
 })();
 </script>
 </body>

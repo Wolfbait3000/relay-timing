@@ -1,0 +1,9 @@
+{
+  "name": "relay-timing",
+  "version": "1.3.0",
+  "private": true,
+  "description": "Family race timer with shared results on Netlify",
+  "dependencies": {
+    "@netlify/blobs": "^10.7.13"
+  }
+}
