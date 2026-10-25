@@ -3,22 +3,31 @@ import { reply, userFromRequest, sameOwner } from "../lib/auth.mjs";
 
 // Races belong to the timekeeper account that created them.
 // Race record:      races[id]     = { owner, state, updatedAt }
-// Published record: published[id] = { id, owner, name, startedAt, publishedAt, finished, dnf }
+//   state = { name, mode: "single" | "multi", events: [ { id, name, racers, startedAt, stoppedAt, finishes, distance, distUnit, distPreset, showPace, paceUnit } ] }
+//   Older races have flat fields instead of events; they are read as one event.
+// Published record: published[id] = { id, owner, name, startedAt, publishedAt, events: [ { name, distance, distUnit, showPace, paceUnit, startedAt, finished, dnf } ] }
 //
 // GET  ?id=ID                          -> { state, owner }             (anyone with the link)
 // POST { action: "create", state }     -> { id }                       (timekeeper login)
 // PUT  { id, state }                   -> { ok: true }                 (owner only)
-// POST { action: "publish", id }       -> { ok: true }                 (owner only, race must be stopped)
+// POST { action: "publish", id }       -> { ok: true }                 (owner only, every event must be stopped)
 // POST { action: "delete", id }        -> { ok: true }                 (owner only)
 
 const MAX_STATE_CHARS = 100000;
 
 const newId = () => crypto.randomUUID().replace(/-/g, "").slice(0, 8);
 
-// Public results copy: finishers in place order, then racers who did not finish
-function buildResults(id, owner, race) {
-  const racers = Array.isArray(race.racers) ? race.racers : [];
-  const times = race.finishes || {};
+const eventsOf = (race) =>
+  Array.isArray(race.events) && race.events.length
+    ? race.events
+    : [{ name: race.name, racers: race.racers, startedAt: race.startedAt, stoppedAt: race.stoppedAt, finishes: race.finishes, distance: race.distance, distUnit: race.distUnit, showPace: race.showPace, paceUnit: race.paceUnit }];
+
+const allStopped = (race) => eventsOf(race).every((e) => e.stoppedAt);
+
+// Public results for one event: finishers in place order, then racers who did not finish
+function eventResults(e, raceName) {
+  const racers = Array.isArray(e.racers) ? e.racers : [];
+  const times = e.finishes || {};
   const finished = racers
     .filter((r) => times[r.id] != null)
     .map((r) => ({ bib: r.bib, name: r.name, ms: times[r.id] }))
@@ -28,8 +37,27 @@ function buildResults(id, owner, race) {
     .filter((r) => times[r.id] == null)
     .map((r) => ({ bib: r.bib, name: r.name }));
   return {
-    id, owner, name: race.name || "Family race", startedAt: race.startedAt, publishedAt: Date.now(), finished, dnf,
-    distance: race.distance || null, distUnit: race.distUnit || "mi", showPace: !!race.showPace, paceUnit: race.paceUnit || "min/mi",
+    name: e.name || raceName || "Family race",
+    distance: e.distance || null,
+    distUnit: e.distUnit || "mi",
+    showPace: !!e.showPace,
+    paceUnit: e.paceUnit || "min/mi",
+    startedAt: e.startedAt || null,
+    finished,
+    dnf,
+  };
+}
+
+function buildResults(id, owner, race) {
+  const events = eventsOf(race).map((e) => eventResults(e, race.name));
+  const starts = events.map((e) => e.startedAt).filter(Boolean);
+  return {
+    id,
+    owner,
+    name: race.name || "Family race",
+    startedAt: starts.length ? Math.min(...starts) : null,
+    publishedAt: Date.now(),
+    events,
   };
 }
 
@@ -78,15 +106,15 @@ export default async (req) => {
   if (req.method === "PUT") {
     if (!validState(body.state)) return reply(400, { error: "Missing or too large race data" });
     await races.setJSON(id, { owner: record.owner, state: body.state, updatedAt: Date.now() });
-    // Keep an already-published copy in step with edits
-    if (body.state.stoppedAt && (await published.get(id, { type: "json" }))) {
+    // Keep an already-published copy in step with edits once every event is stopped
+    if (allStopped(body.state) && (await published.get(id, { type: "json" }))) {
       await published.setJSON(id, buildResults(id, record.owner, body.state));
     }
     return reply(200, { ok: true });
   }
 
   if (body.action === "publish") {
-    if (!record.state.stoppedAt) return reply(409, { error: "Stop the race before publishing" });
+    if (!allStopped(record.state)) return reply(409, { error: "Stop every event before publishing" });
     await published.setJSON(id, buildResults(id, record.owner, record.state));
     return reply(200, { ok: true });
   }

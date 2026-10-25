@@ -6,9 +6,12 @@ A simple race timer for small family races, hosted on Netlify. Timekeepers time 
 
 1. Go to the home page and choose **Timekeeper**.
 2. Create an account with a timekeeper ID (more than 4 characters, such as `thundr$truck`) and a password (at least 6 characters). Next time, log in with the same details.
-3. Choose **New race**, name it, add the racers with their bib numbers, and press **Continue to race**. Press **Start race** to start the clock.
-   - Under **Race details**, enter the race length and pick miles or kilometers.
-   - Tick **Show pace** to add a pace column to the results. Pick the pace unit: minutes per mile, minutes per km, miles per hour, or km per hour.
+3. Choose **New race**, then name the event and pick **Single event race** or **Multiple event race**. Press **Next**.
+   - **Single event race:** register the racers and set the race details (length, pace), then press **Continue to race**.
+   - **Multiple event race:** on the **Add event** page, name each event (for example 5K and 10K), register its racers, and set its distance and pace. Press **Save event** for each one, then **Continue to race**. Each event has its own start and stop, chosen with the tabs at the top of the timer.
+   - Under **Race details**, enter the race length by choosing a distance. Choose **Other** to type your own distance and pick miles or kilometers.
+   - Tick **Show pace** to add a pace column to the results. Then pick the pace unit: minutes per mile, minutes per km, miles per hour, or km per hour.
+   - Press **Start race** (or **Start this event**) to start the clock.
 4. Press **Finish** next to each racer as they cross the line. Results sort into places automatically.
 5. When everyone is done, press **Stop race**. Anyone still out is marked Did Not Finish.
 6. Press **Publish to home page** so viewers can see the results.

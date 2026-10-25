@@ -46,6 +46,8 @@ tr:last-child td{border-bottom:0}
 .bib{background:var(--ink);color:#fff;border-radius:6px;padding:3px 8px;font-weight:700;font-size:14px}
 .time{font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
 .dnf{color:var(--muted);font-size:14px;margin:12px 0 0}
+.event{margin-bottom:6px}
+.event-title{color:var(--ink);text-transform:none;letter-spacing:0;font-size:16px;margin:14px 0 6px}
 .pace{color:var(--muted);font-size:14px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 @media (max-width:600px){.grid2{grid-template-columns:1fr}}
 </style>
@@ -260,7 +262,7 @@ tr:last-child td{border-bottom:0}
           ? '<span class="tag live">Live</span>'
           : (r.published ? '<span class="tag pub">Published</span>' : '<span class="tag">Finished, not published</span>');
         return '<li>' +
-          '<div class="grow"><h3>' + esc(r.name) + esc(RelayPace.lengthSuffix(r.distance, r.distUnit)) + '</h3>' +
+          '<div class="grow"><h3>' + esc(r.name) + (r.eventCount > 1 ? ' (' + r.eventCount + ' events)' : esc(RelayPace.lengthSuffix(r.distance, r.distUnit))) + '</h3>' +
           '<p class="date" style="margin:0">' + esc(dateText(r.startedAt || r.updatedAt)) + '</p></div>' +
           status +
           '<div class="row">' +
@@ -293,28 +295,39 @@ tr:last-child td{border-bottom:0}
   });
 
   // ---------- viewer ----------
+  // A published race: one section per event (a single race has one event)
   function renderRace(race) {
-    var rows = race.finished.map(function (r) {
-      var cls = r.place <= 3 ? ' p' + r.place : '';
-      return '<tr>' +
-        '<td style="width:60px"><span class="place' + cls + '">' + r.place + '</span></td>' +
-        '<td style="width:70px"><span class="bib">#' + esc(r.bib) + '</span></td>' +
-        '<td>' + esc(r.name) + '</td>' +
-        '<td class="time">' + fmt(r.ms) + '</td>' +
-        '<td class="pace">' + (race.showPace && race.distance ? esc(RelayPace.pace(r.ms, race.distance, race.distUnit, race.paceUnit)) : '') + '</td>' +
-        '</tr>';
+    var events = race.events || [race];
+    var multi = events.length > 1;
+    var title = multi
+      ? esc(race.name) + ' (' + events.length + ' events)'
+      : esc(race.name) + esc(RelayPace.lengthSuffix(events[0].distance, events[0].distUnit));
+    var sections = events.map(function (ev) {
+      var rows = ev.finished.map(function (r) {
+        var cls = r.place <= 3 ? ' p' + r.place : '';
+        var pace = ev.showPace && ev.distance ? esc(RelayPace.pace(r.ms, ev.distance, ev.distUnit, ev.paceUnit)) : '';
+        return '<tr>' +
+          '<td style="width:60px"><span class="place' + cls + '">' + r.place + '</span></td>' +
+          '<td style="width:70px"><span class="bib">#' + esc(r.bib) + '</span></td>' +
+          '<td>' + esc(r.name) + '</td>' +
+          '<td class="time">' + fmt(r.ms) + '</td>' +
+          '<td class="pace">' + pace + '</td>' +
+          '</tr>';
+      }).join('');
+      var dnf = ev.dnf && ev.dnf.length
+        ? '<p class="dnf">Did not finish: ' + ev.dnf.map(function (r) {
+            return esc(r.name) + ' (#' + esc(r.bib) + ')';
+          }).join(', ') + '</p>'
+        : '';
+      return '<div class="event">' +
+        (multi ? '<h3 class="event-title">' + esc(ev.name) + esc(RelayPace.lengthSuffix(ev.distance, ev.distUnit)) + '</h3>' : '') +
+        (rows ? '<table>' + rows + '</table>' : '<p class="empty">No finishers.</p>') +
+        dnf + '</div>';
     }).join('');
-    var dnf = race.dnf && race.dnf.length
-      ? '<p class="dnf">Did not finish: ' + race.dnf.map(function (r) {
-          return esc(r.name) + ' (#' + esc(r.bib) + ')';
-        }).join(', ') + '</p>'
-      : '';
     return '<section class="card">' +
-      '<h2>' + esc(race.name) + esc(RelayPace.lengthSuffix(race.distance, race.distUnit)) + '</h2>' +
+      '<h2>' + title + '</h2>' +
       '<p class="date">' + esc(dateText(race.startedAt || race.publishedAt)) + '</p>' +
-      (race.distance ? '<p class="date">Race length: ' + esc(race.distance) + ' ' + (race.distUnit === 'km' ? 'km' : 'miles') + '</p>' : '') +
-      (rows ? '<table>' + rows + '</table>' : '<p class="empty">No finishers.</p>') +
-      dnf + '</section>';
+      sections + '</section>';
   }
 
   function showViewerRaces() {

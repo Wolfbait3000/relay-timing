@@ -10,17 +10,22 @@
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
 header{background:var(--ink);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-header h1{font-size:20px;margin:0}
+header h1{font-size:20px;margin:0;display:flex;align-items:center;gap:10px}
 header a{color:#fff;font-size:14px}
 main{max-width:860px;margin:0 auto;padding:20px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}
 h2{font-size:18px;margin:0 0 12px}
+h3{font-size:13px;margin:0 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .sub{color:var(--muted);font-size:14px;margin:0 0 12px}
 button{font:inherit;border:0;border-radius:8px;padding:10px 16px;cursor:pointer;background:var(--accent);color:#fff}
 button:disabled{opacity:.4;cursor:not-allowed}
 button.secondary{background:#e6eaf0;color:var(--ink)}
 button.ghost{background:transparent;color:var(--stop);border:1px solid var(--stop)}
 button.small{padding:6px 10px;font-size:14px}
+button.on{background:var(--accent);color:#fff}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.tabs button{background:#e6eaf0;color:var(--ink)}
+.tabs button.on{background:var(--accent);color:#fff}
 input{font:inherit;padding:9px;border:1px solid #c4cbd5;border-radius:8px;width:100%}
 table{width:100%;border-collapse:collapse}
 th{text-align:left;font-size:13px;color:var(--muted);font-weight:600;padding:0 6px 8px}
@@ -32,15 +37,14 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
 .details{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
 .field{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted);flex:1;min-width:140px}
 .field input,.field select{font:inherit;color:var(--ink);padding:9px;border:1px solid #c4cbd5;border-radius:8px;width:100%;background:#fff}
-.check{display:flex;align-items:center;gap:8px;font-size:15px;margin-bottom:10px}
-.pace{color:var(--muted);font-size:14px;min-width:80px;text-align:right;font-variant-numeric:tabular-nums}
-.check input{width:auto;margin:0}
 .field select{-webkit-appearance:none;appearance:none;padding-right:42px;background-color:#fff;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%231d2430' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;background-size:12px 8px}
+.check{display:flex;align-items:center;gap:8px;font-size:15px;margin-bottom:10px}
+.check input{width:auto;margin:0}
 </style>
 </head>
 <body>
 <header>
-  <h1 style="display:flex;align-items:center;gap:10px"><img src="logo.svg" alt="" width="26" height="26" style="background:#fff;border-radius:7px;padding:3px"> Edit race</h1>
+  <h1><img src="logo.svg" alt="" width="26" height="26" style="background:#fff;border-radius:7px;padding:3px"> Edit race</h1>
   <a href="index.html">Home</a>
 </header>
 
@@ -53,8 +57,14 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
       <input id="raceName" maxlength="80" placeholder="Race name">
     </div>
 
+    <div id="tabs" class="tabs hidden"></div>
+
     <div class="card">
-      <h2>Race details</h2>
+      <h2 id="eventTitle">Race details</h2>
+      <div id="eventNameRow" class="hidden" style="margin-bottom:12px">
+        <h3>Event name</h3>
+        <input id="evName" maxlength="60">
+      </div>
       <div class="details">
         <label class="field">Race length
           <select id="distPreset">
@@ -89,7 +99,6 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
           </select>
         </label>
       </div>
-      <p class="sub" style="margin:0">Pace is worked out from the race length and each finish time.</p>
     </div>
 
     <div class="card">
@@ -108,7 +117,7 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
       <button id="saveBtn">Save changes</button>
       <span id="saveMsg" class="msg"></span>
     </div>
-    <p class="sub" style="margin-top:12px">If this race is already published, saving updates the copy on the viewer page too.</p>
+    <p class="sub" style="margin-top:12px">If this race is already published, saving updates the copy on the viewer page too. Events and racers can be edited here, but new events are added from the timer page.</p>
   </div>
 </main>
 
@@ -117,11 +126,14 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
 (function () {
   'use strict';
 
-  var API_RACE = '/.netlify/functions/race';
+  var API = '/.netlify/functions/race';
   var SESSION_KEY = 'family-race-session';
-
   var raceId = new URLSearchParams(location.search).get('race');
-  var raceState = null;
+
+  var raceState = null;  // the race as loaded from the server
+  var events = [];       // working copy of every event
+  var mode = 'single';
+  var active = 0;        // event shown in the form
 
   function $(id) { return document.getElementById(id); }
   function esc(s) {
@@ -145,45 +157,98 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
     if (!t) return null;
     var m;
     if ((m = t.match(/^(\d+):(\d{1,2})(?:\.(\d+))?$/))) {
-      // m:ss.t
       if (+m[2] >= 60) return NaN;
       return Math.round((+m[1] * 60 + +m[2] + (m[3] ? +('0.' + m[3]) : 0)) * 1000);
     }
     if ((m = t.match(/^(\d+):(\d{1,2}):(\d{1,2})(?:\.(\d+))?$/))) {
-      // h:mm:ss.t
       if (+m[2] >= 60 || +m[3] >= 60) return NaN;
       return Math.round((+m[1] * 3600 + +m[2] * 60 + +m[3] + (m[4] ? +('0.' + m[4]) : 0)) * 1000);
     }
     if ((m = t.match(/^(\d+)(?:\.(\d+))?$/))) {
-      // seconds only, e.g. 62.4
       return Math.round((+m[1] + (m[2] ? +('0.' + m[2]) : 0)) * 1000);
     }
     return NaN;
   }
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
-
+  function session() {
+    try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch (e) { return null; }
+  }
   function notice(text) {
     $('notice').textContent = text;
     $('notice').classList.remove('hidden');
     $('editor').classList.add('hidden');
   }
 
-  function session() {
-    try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch (e) { return null; }
+  // ---------- form <-> event ----------
+  function showEvent(i) {
+    var e = events[i];
+    var preset = e.distPreset || (e.distance ? 'other' : '');
+    $('eventTitle').textContent = mode === 'multi' ? 'Event ' + (i + 1) : 'Race details';
+    $('eventNameRow').classList.toggle('hidden', mode !== 'multi');
+    $('evName').value = e.name || '';
+    $('distPreset').value = preset;
+    $('distInput').value = preset === 'other' && e.distance ? e.distance : '';
+    $('distUnit').value = e.distUnit || 'mi';
+    $('otherRow').classList.toggle('hidden', preset !== 'other');
+    $('showPace').checked = !!e.showPace;
+    $('paceUnit').value = e.paceUnit || 'min/mi';
+    $('paceRow').classList.toggle('hidden', !e.showPace);
+
+    $('racerRows').innerHTML = '';
+    e.racers.forEach(function (r) { addRow(r.id, r.bib, r.name, e.finishes[r.id] != null ? e.finishes[r.id] : null); });
+
+    $('tabs').innerHTML = events.map(function (x, n) {
+      return '<button data-tab="' + n + '" class="' + (n === i ? 'on' : '') + '">' + esc(x.name || 'Event ' + (n + 1)) + '</button>';
+    }).join('');
   }
 
-  function rowHtml(r) {
-    var time = r.ms != null ? fmt(r.ms) : '';
-    return '<tr data-id="' + esc(r.id) + '">' +
-      '<td style="width:90px"><input class="bib" value="' + esc(r.bib) + '" maxlength="8"></td>' +
-      '<td><input class="name" value="' + esc(r.name) + '" maxlength="40"></td>' +
+  // Copy what is on screen back into the active event
+  function readEvent(i) {
+    var e = events[i];
+    var racers = [];
+    var finishes = {};
+    var rows = $('racerRows').querySelectorAll('tr');
+    var error = '';
+    var bibs = {};
+    rows.forEach(function (tr) {
+      if (error) return;
+      var id = tr.getAttribute('data-id');
+      var bib = tr.querySelector('.bib').value.trim();
+      var name = tr.querySelector('.name').value.trim();
+      var ms = parseTime(tr.querySelector('.time').value);
+      if (!name) { error = 'Every racer needs a name.'; return; }
+      if (!bib) { error = 'Every racer needs a bib number.'; return; }
+      if (bibs[bib.toLowerCase()]) { error = 'Bib #' + bib + ' is used more than once in this event.'; return; }
+      if (isNaN(ms)) { error = 'Check the time for ' + name + '. Use m:ss.t, like 1:02.4.'; return; }
+      bibs[bib.toLowerCase()] = true;
+      racers.push({ id: id, name: name, bib: bib });
+      if (ms !== null) finishes[id] = ms;
+    });
+    if (error) return error;
+
+    var preset = $('distPreset').value;
+    var d = parseFloat($('distInput').value);
+    var p = (window.RelayPace && RelayPace.PRESETS[preset]) || null;
+    e.name = mode === 'multi' ? ($('evName').value.trim() || e.name) : e.name;
+    e.distPreset = preset;
+    if (preset === 'other') { e.distance = d > 0 ? d : null; e.distUnit = $('distUnit').value; }
+    else { e.distance = p ? p.distance : null; e.distUnit = p ? p.unit : 'mi'; }
+    e.showPace = $('showPace').checked;
+    e.paceUnit = $('paceUnit').value;
+    e.racers = racers;
+    e.finishes = finishes;
+    return '';
+  }
+
+  function addRow(id, bib, name, ms) {
+    var time = ms != null ? fmt(ms) : '';
+    $('racerRows').insertAdjacentHTML('beforeend',
+      '<tr data-id="' + esc(id) + '">' +
+      '<td style="width:90px"><input class="bib" value="' + esc(bib) + '" maxlength="8"></td>' +
+      '<td><input class="name" value="' + esc(name) + '" maxlength="40"></td>' +
       '<td style="width:150px"><input class="time" value="' + esc(time) + '" placeholder="did not finish" maxlength="12"></td>' +
       '<td style="width:80px"><button class="small ghost remove">Remove</button></td>' +
-      '</tr>';
-  }
-
-  function addRow(r) {
-    $('racerRows').insertAdjacentHTML('beforeend', rowHtml(r));
+      '</tr>');
   }
 
   $('racerRows').addEventListener('click', function (e) {
@@ -191,45 +256,34 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
   });
 
   $('addRacerBtn').addEventListener('click', function () {
-    addRow({ id: uid(), bib: '', name: '', ms: null });
+    addRow(uid(), '', '', null);
     var rows = $('racerRows').querySelectorAll('tr');
     rows[rows.length - 1].querySelector('.bib').focus();
   });
 
-  // Race details (length and pace)
-  function setDetailsInputs(s) {
-    var preset = s.distPreset || (s.distance ? 'other' : '');
-    $('distPreset').value = preset;
-    $('distInput').value = preset === 'other' && s.distance ? s.distance : '';
-    $('distUnit').value = s.distUnit || 'mi';
-    $('otherRow').classList.toggle('hidden', preset !== 'other');
-    $('showPace').checked = !!s.showPace;
-    $('paceUnit').value = s.paceUnit || 'min/mi';
-    $('paceRow').classList.toggle('hidden', !s.showPace);
-  }
   $('distPreset').addEventListener('change', function () {
     $('otherRow').classList.toggle('hidden', this.value !== 'other');
   });
   $('showPace').addEventListener('change', function () {
     $('paceRow').classList.toggle('hidden', !this.checked);
   });
-  // Distance and unit for the chosen preset, or the typed distance when Other is chosen
-  function readRace() {
-    var preset = $('distPreset').value;
-    if (preset === 'other') {
-      var d = parseFloat($('distInput').value);
-      return { distance: d > 0 ? d : null, unit: $('distUnit').value };
-    }
-    var p = RelayPace.PRESETS[preset];
-    return { distance: p ? p.distance : null, unit: p ? p.unit : 'mi' };
-  }
 
+  $('tabs').addEventListener('click', function (e) {
+    var n = e.target.getAttribute('data-tab');
+    if (n === null) return;
+    var err = readEvent(active);
+    if (err) { $('saveMsg').className = 'msg'; $('saveMsg').textContent = err; return; }
+    active = +n;
+    showEvent(active);
+  });
+
+  // ---------- load and save ----------
   function load() {
-    if (!raceId) return notice('No race selected. Go back to Home and open a race from Your races.');
+    if (!raceId) return notice('No race selected. Go to Home and open a race from Your races.');
     var s = session();
     if (!s) return notice('Log in as a timekeeper first. Go to Home and choose Timekeeper.');
 
-    fetch(API_RACE + '?id=' + encodeURIComponent(raceId), { cache: 'no-store' }).then(function (res) {
+    fetch(API + '?id=' + encodeURIComponent(raceId), { cache: 'no-store' }).then(function (res) {
       return res.json().then(function (d) {
         if (!res.ok) throw new Error(d.error || 'Race not found');
         return d;
@@ -239,13 +293,14 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
         return notice('This race belongs to another timekeeper, so you cannot edit it.');
       }
       raceState = d.state;
-      setDetailsInputs(d.state);
+      mode = d.state.mode === 'multi' ? 'multi' : 'single';
+      events = RelayPace.eventsOf(d.state).map(function (e) { return JSON.parse(JSON.stringify(e)); });
       $('raceName').value = d.state.name || '';
-      (d.state.racers || []).forEach(function (r) {
-        addRow({ id: r.id, bib: r.bib, name: r.name, ms: (d.state.finishes || {})[r.id] != null ? d.state.finishes[r.id] : null });
-      });
       $('notice').classList.add('hidden');
       $('editor').classList.remove('hidden');
+      $('tabs').classList.toggle('hidden', events.length < 2);
+      active = 0;
+      showEvent(active);
     }).catch(function (err) {
       notice('Could not load this race: ' + err.message);
     });
@@ -254,48 +309,21 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
   $('saveBtn').addEventListener('click', function () {
     var s = session();
     if (!s || !raceState) return;
+    var err = readEvent(active);
+    if (err) { $('saveMsg').className = 'msg'; $('saveMsg').textContent = err; return; }
 
-    var racers = [];
-    var finishes = {};
-    var bibs = {};
-    var error = '';
-    var rows = $('racerRows').querySelectorAll('tr');
-
-    rows.forEach(function (tr) {
-      if (error) return;
-      var id = tr.getAttribute('data-id');
-      var bib = tr.querySelector('.bib').value.trim();
-      var name = tr.querySelector('.name').value.trim();
-      var ms = parseTime(tr.querySelector('.time').value);
-      if (!name) { error = 'Every racer needs a name.'; return; }
-      if (!bib) { error = 'Every racer needs a bib number.'; return; }
-      if (bibs[bib.toLowerCase()]) { error = 'Bib #' + bib + ' is used more than once.'; return; }
-      if (isNaN(ms)) { error = 'Check the time for ' + name + '. Use m:ss.t, like 1:02.4.'; return; }
-      bibs[bib.toLowerCase()] = true;
-      racers.push({ id: id, name: name, bib: bib });
-      if (ms !== null) finishes[id] = ms;
+    var name = $('raceName').value.trim() || 'Family race';
+    events.forEach(function (e, i) {
+      if (!e.name) e.name = 'Event ' + (i + 1);
     });
+    if (mode === 'single') events[0].name = name;
 
-    if (error) { $('saveMsg').className = 'msg'; $('saveMsg').textContent = error; return; }
-
-    var race = readRace();
-    var next = {
-      name: $('raceName').value.trim() || 'Family race',
-      racers: racers,
-      startedAt: raceState.startedAt || null,
-      stoppedAt: raceState.stoppedAt || null,
-      finishes: finishes,
-      distance: race.distance,
-      distPreset: $('distPreset').value,
-      distUnit: race.unit,
-      showPace: $('showPace').checked,
-      paceUnit: $('paceUnit').value
-    };
+    var next = { name: name, mode: mode, events: events };
 
     $('saveBtn').disabled = true;
     $('saveMsg').className = 'msg';
     $('saveMsg').textContent = 'Saving...';
-    fetch(API_RACE, {
+    fetch(API, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.token },
       body: JSON.stringify({ id: raceId, state: next })
@@ -307,6 +335,7 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
       raceState = next;
       $('saveMsg').className = 'msg ok';
       $('saveMsg').textContent = 'Saved.';
+      showEvent(active);
     }).catch(function (err) {
       $('saveMsg').className = 'msg';
       $('saveMsg').textContent = 'Could not save: ' + err.message;

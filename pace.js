@@ -48,12 +48,31 @@ var RelayPace = (function () {
 
   function label(unit) { return LABELS[unit] || unit; }
 
+  // The events in a race. Older single-event races (flat fields) become one event.
+  function eventsOf(s) {
+    if (s && Array.isArray(s.events)) return s.events;
+    return [{
+      id: 'e1',
+      name: (s && s.name) || 'Family race',
+      racers: (s && s.racers) || [],
+      startedAt: (s && s.startedAt) || null,
+      stoppedAt: (s && s.stoppedAt) || null,
+      finishes: (s && s.finishes) || {},
+      distance: (s && s.distance) || null,
+      distUnit: (s && s.distUnit) || 'mi',
+      distPreset: (s && s.distPreset) || '',
+      showPace: !!(s && s.showPace),
+      paceUnit: (s && s.paceUnit) || 'min/mi'
+    }];
+  }
+
   return {
     pace: pace,
     mmss: mmss,
     label: label,
     LABELS: LABELS,
     PRESETS: PRESETS,
-    lengthSuffix: lengthSuffix
+    lengthSuffix: lengthSuffix,
+    eventsOf: eventsOf
   };
 })();
