@@ -14,6 +14,13 @@ A single-page race timer for small family races. The whole app is `index.html` (
 
 ## Code layout inside `index.html`
 
+- `index.html` is the public home page. It lists published races from `GET /.netlify/functions/results`. It has no timer code.
+- `timer.html` is the timer app (everything described below). Share links are `timer.html?race=ID`. The old root `?race=` links no longer open the timer.
+- `netlify/functions/results.mjs` lists the `published` store, newest first.
+- Publish: the timekeeper's "Publish to home page" button (shown only after the race is stopped) first saves the latest state with PUT, then sends `POST {action:"publish", id, pin}`. The server checks the PIN and `stoppedAt`, then saves a results copy to the `published` store (`buildResults` in `race.mjs`). Publishing again overwrites the copy.
+
+## Code layout inside `timer.html`
+
 - `<style>`: CSS variables in `:root` (`--go`, `--stop`, `--accent`, medal colors). Mobile breakpoint at 600px.
 - `<body>`: two sections, `#setupView` and `#raceView`, toggled with the `hidden` class.
 - `<script>` (wrapped in an IIFE, `'use strict'`):
@@ -68,4 +75,4 @@ No automated test suite exists. To verify a change:
 - v1: Initial version. Event setup, bib registration, overall start clock, per-racer Finish with Undo, sorted places, CSV export, saved in the browser.
 - v1.2: Added a Stop race button. It is a faint underlined link while racers are still out, and a big red button once everyone has finished. Stopping always asks for confirmation. Unfinished racers are marked DNF (shown under "Did not finish"), and the clock freezes via `state.stoppedAt`. Finish buttons lock after stopping. Reset and New event clear `stoppedAt`.
 - v1.3: Shared results on Netlify. Timekeeper PIN, share link `?race=ID`, live read-only viewer that polls every 3 seconds, and a Netlify Function (`netlify/functions/race.mjs`) that stores races in Netlify Blobs.
-- v1.1: Fixed "Add racer" doing nothing when the browser blocks `localStorage`. `save()` now catches the error, the list re-renders before saving, and a warning line (`#storageNote`) appears. Always render from `state` first, then save.
+- v1.4: Home page at the root lists published races (`netlify/functions/results.mjs`). The timer moved to `timer.html`. Timekeepers can publish a stopped race to the home page with "Publish to home page".- v1.1: Fixed "Add racer" doing nothing when the browser blocks `localStorage`. `save()` now catches the error, the list re-renders before saving, and a warning line (`#storageNote`) appears. Always render from `state` first, then save.

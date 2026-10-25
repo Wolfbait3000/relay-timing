@@ -17,6 +17,21 @@ const reply = (status, body) =>
 
 const newId = () => crypto.randomUUID().replace(/-/g, "").slice(0, 8);
 
+// Public results copy: finishers in place order, then racers who did not finish
+function buildResults(id, race) {
+  const racers = Array.isArray(race.racers) ? race.racers : [];
+  const times = race.finishes || {};
+  const finished = racers
+    .filter((r) => times[r.id] != null)
+    .map((r) => ({ bib: r.bib, name: r.name, ms: times[r.id] }))
+    .sort((a, b) => a.ms - b.ms)
+    .map((r, i) => ({ place: i + 1, ...r }));
+  const dnf = racers
+    .filter((r) => times[r.id] == null)
+    .map((r) => ({ bib: r.bib, name: r.name }));
+  return { id, name: race.name || "Family race", startedAt: race.startedAt, publishedAt: Date.now(), finished, dnf };
+}
+
 export default async (req) => {
   const store = getStore("races");
 
@@ -46,6 +61,18 @@ export default async (req) => {
     const record = await store.get(String(body.id || ""), { type: "json" });
     if (!record) return reply(404, { error: "Race not found" });
     if (record.pin !== pin) return reply(403, { error: "Wrong timekeeper PIN" });
+    return reply(200, { ok: true });
+  }
+
+  // Publish a finished race to the home page (timekeeper only, after the race is stopped)
+  if (req.method === "POST" && body.action === "publish") {
+    const id = String(body.id || "");
+    const record = await store.get(id, { type: "json" });
+    if (!record) return reply(404, { error: "Race not found" });
+    if (record.pin !== pin) return reply(403, { error: "Wrong timekeeper PIN" });
+    if (!record.state.stoppedAt) return reply(409, { error: "Stop the race before publishing" });
+
+    await getStore("published").setJSON(id, buildResults(id, record.state));
     return reply(200, { ok: true });
   }
 
