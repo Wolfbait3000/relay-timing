@@ -47,6 +47,9 @@ tr:last-child td{border-bottom:0}
 .time{font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
 .dnf{color:var(--muted);font-size:14px;margin:12px 0 0}
 .event{margin-bottom:6px}
+table.results{table-layout:fixed}
+.pace-cell{text-align:right;color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums;vertical-align:middle}
+.pace-note{font-size:13px;line-height:1.3}
 .event-title{color:var(--ink);text-transform:none;letter-spacing:0;font-size:16px;margin:14px 0 6px}
 .pace{color:var(--muted);font-size:14px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 @media (max-width:600px){.grid2{grid-template-columns:1fr}}
@@ -305,13 +308,13 @@ tr:last-child td{border-bottom:0}
     var sections = events.map(function (ev) {
       var rows = ev.finished.map(function (r) {
         var cls = r.place <= 3 ? ' p' + r.place : '';
-        var pace = ev.showPace && ev.distance ? esc(RelayPace.pace(r.ms, ev.distance, ev.distUnit, ev.paceUnit)) : '';
+        var pace = ev.showPace && ev.distance ? esc(RelayPace.pace(r.ms, ev.distance, ev.distUnit, ev.paceUnit)) : '<span class="pace-note">Pace is not displayed for this event.</span>';
         return '<tr>' +
           '<td style="width:60px"><span class="place' + cls + '">' + r.place + '</span></td>' +
           '<td style="width:70px"><span class="bib">#' + esc(r.bib) + '</span></td>' +
           '<td>' + esc(r.name) + '</td>' +
           '<td class="time">' + fmt(r.ms) + '</td>' +
-          '<td class="pace">' + pace + '</td>' +
+          '<td class="pace-cell">' + pace + '</td>' +
           '</tr>';
       }).join('');
       var dnf = ev.dnf && ev.dnf.length
@@ -321,7 +324,7 @@ tr:last-child td{border-bottom:0}
         : '';
       return '<div class="event">' +
         (multi ? '<h3 class="event-title">' + esc(ev.name) + esc(RelayPace.lengthSuffix(ev.distance, ev.distUnit)) + '</h3>' : '') +
-        (rows ? '<table>' + rows + '</table>' : '<p class="empty">No finishers.</p>') +
+        (rows ? '<table class="results"><colgroup><col style="width:60px"><col style="width:70px"><col><col style="width:110px"><col style="width:230px"></colgroup>' + rows + '</table>' : '<p class="empty">No finishers.</p>') +
         dnf + '</div>';
     }).join('');
     return '<section class="card">' +
