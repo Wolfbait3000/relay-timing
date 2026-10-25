@@ -166,6 +166,21 @@ table.results{table-layout:fixed}
   }
   function setSession(s) { localStorage.setItem(SESSION_KEY, JSON.stringify(s)); }
   function clearSession() { localStorage.removeItem(SESSION_KEY); }
+
+  // Deleted races are hidden for a few minutes, in case the server list is still catching up
+  var DELETED_KEY = 'family-race-deleted';
+  var HOME_FLAG = 'family-race-open-home';
+  function markDeleted(id) {
+    var list = {};
+    try { list = JSON.parse(localStorage.getItem(DELETED_KEY)) || {}; } catch (e) {}
+    list[id] = Date.now();
+    localStorage.setItem(DELETED_KEY, JSON.stringify(list));
+  }
+  function recentlyDeleted(id) {
+    var list = {};
+    try { list = JSON.parse(localStorage.getItem(DELETED_KEY)) || {}; } catch (e) {}
+    return !!list[id] && Date.now() - list[id] < 5 * 60 * 1000;
+  }
   function authHeaders() {
     var s = getSession();
     var h = { 'Content-Type': 'application/json' };
@@ -260,7 +275,7 @@ table.results{table-layout:fixed}
         return d;
       });
     }).then(function (d) {
-      var races = d.races || [];
+      var races = (d.races || []).filter(function (r) { return !recentlyDeleted(r.id); });
       $('myRacesEmpty').classList.toggle('hidden', races.length > 0);
       $('myRaces').innerHTML = races.map(function (r) {
         var status = !r.stoppedAt
@@ -294,7 +309,12 @@ table.results{table-layout:fixed}
       return res.json().then(function (d) {
         if (!res.ok) throw new Error(d.error || 'Could not delete');
       });
-    }).then(loadMyRaces).catch(function (err) {
+    }).then(function () {
+      // Stay on the timekeeper home after the page reloads
+      markDeleted(id);
+      sessionStorage.setItem(HOME_FLAG, '1');
+      location.reload();
+    }).catch(function (err) {
       $('homeMsg').textContent = 'Could not delete: ' + err.message;
     });
   });
@@ -365,7 +385,12 @@ table.results{table-layout:fixed}
   $('loginBackBtn').addEventListener('click', showStart);
 
   // A saved sign-in is checked when the home page loads; a stale one is cleared by the races request
-  showStart();
+  if (sessionStorage.getItem(HOME_FLAG) && getSession()) {
+    sessionStorage.removeItem(HOME_FLAG);
+    showHome();
+  } else {
+    showStart();
+  }
 })();
 </script>
 </body>

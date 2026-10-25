@@ -621,6 +621,7 @@ input{font:inherit;padding:10px;border:1px solid #3a3f44;border-radius:8px;width
     var name = (e.name || '').trim();
     if (!name) { $('setupMsg').textContent = 'Name this event first.'; $('evName').focus(); return; }
     if (!e.racers.length) { $('setupMsg').textContent = 'Register at least one racer for this event.'; return; }
+    if (!e.distance) { $('setupMsg').textContent = 'Choose a race length for this event first.'; return; }
     e.name = name;
     var editing = draftIndex;
     if (editing >= 0) state.events[editing] = clone(e);
@@ -686,6 +687,11 @@ input{font:inherit;padding:10px;border:1px solid #3a3f44;border-radius:8px;width
       state.view = 'race';
       save();
       showView();
+      return;
+    }
+    var missing = state.events.filter(function (x) { return !x.distance; });
+    if (missing.length) {
+      $('setupMsg').textContent = 'Choose a race length' + (state.mode === 'multi' ? ' for every event' : '') + ' first.';
       return;
     }
     if (!session()) {
@@ -931,7 +937,8 @@ input{font:inherit;padding:10px;border:1px solid #3a3f44;border-radius:8px;width
   }
 
   // Clock keeps running from the saved start time, so a page reload does not lose it
-  setInterval(updateClock, 100);
+  // Every 10 ms so the hundredths digit changes smoothly
+  setInterval(updateClock, 10);
 
   if (linkRaceId) startWithLink(linkRaceId);
   else showView();
