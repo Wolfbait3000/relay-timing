@@ -1,41 +1,37 @@
 # Family Race Timer
 
-A simple, offline timing page for small family races. It is one file, `index.html`, with no install, no server, and no internet connection needed.
+A simple race timer for small family races, hosted on Netlify. Timekeepers time the race and publish the results. Everyone else can look up results with a timekeeper ID.
 
-## How to use it
+## For timekeepers
 
-1. Double-click `index.html` to open it in Chrome, Safari, Edge, or Firefox.
-2. **Name the event** at the top of the first screen.
-3. **Register racers**: type each racer's name and bib number, then press Add racer (or Enter). Bib numbers must be unique. Use Remove to take someone off the list.
-4. Press **Continue to race**.
-5. Press **Start race** to start the overall clock.
-6. As each racer crosses the line, press their **Finish** button. Their time is locked in and they move up into **Results**, sorted into places (1st, 2nd, 3rd...).
-7. Made a mistake? Press **Undo** next to a result to put that racer back on course, then press Finish again.
-8. When you are done, press **Download results (CSV)** to save the places and times as a spreadsheet file.
+1. Go to the home page and choose **Timekeeper**.
+2. Create an account with a timekeeper ID (more than 4 characters, such as `thundr$truck`) and a password (at least 6 characters). Next time, log in with the same details.
+3. Choose **New race**, name it, add the racers with their bib numbers, and press **Continue to race**. Press **Start race** to start the clock.
+4. Press **Finish** next to each racer as they cross the line. Results sort into places automatically.
+5. When everyone is done, press **Stop race**. Anyone still out is marked Did Not Finish.
+6. Press **Publish to home page** so viewers can see the results.
 
-## Buttons
+From **Your races** on the home page you can open a race, edit it (names, bibs, times), or delete it.
 
-| Button | What it does |
-| --- | --- |
-| Continue to race | Moves from registration to the race screen |
-| Start race | Starts the overall clock (only once per race) |
-| Finish | Records that racer's time from the start |
-| Undo | Removes a finish time so the racer can be re-timed |
-| Edit racers | Goes back to registration (only before the race starts) |
-| Download results (CSV) | Saves Place, Bib, Name, Time; anyone who has not finished is listed as DNF |
-| Reset race times | Stops the clock and clears all finish times, keeping the racers |
-| New event | Erases everything and starts over |
+Share the race's link with anyone who needs to follow it live. Viewers can see the live results on that link, but only the published results appear on the home page. Anyone who opens the link on a device logged in as the timekeeper gets the timer instead.
+
+## For viewers
+
+1. Go to the home page and choose **Viewer**.
+2. Type the timekeeper's ID and press **Show races**.
+3. You'll see that timekeeper's published races with places, times, and anyone who did not finish.
 
 ## Good to know
 
-- **Everything is saved in the browser automatically.** If you refresh or close the tab, the event, racers, and clock keep going. Use the same browser on the same computer to pick up where you left off.
-- Times are shown as minutes:seconds.tenths, such as `0:12.4` or `1:03.8`, and as hours past an hour.
-- Places are decided by finish time, fastest first.
-- Clearing browser data or using a private window will lose the saved race, so download the CSV at the end.
-- Times are recorded when you press Finish, so press it right away as each person crosses.
+- Only one device should run a live race as the timekeeper at a time. If two devices are timing the same race, their changes can overwrite each other.
+- Passwords can't be reset by email. Keep your password somewhere safe.
+- Times are recorded when you press Finish, so press it as soon as each person crosses the line.
 
 ## Files
 
-- `index.html`: the whole app (layout, styling, and logic).
-- `README.md`: this guide for people.
+- `index.html`: home page (timekeeper login, your races, viewer lookup).
+- `timer.html`: the race timer.
+- `edit.html`: the race editor.
+- `netlify/functions/`: server code for accounts, races, and results.
+- `netlify/lib/`: shared sign-in helpers.
 - `AGENTS.md`: notes for AI coding agents that edit this project.

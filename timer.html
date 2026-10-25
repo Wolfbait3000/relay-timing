@@ -50,7 +50,7 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
 <header>
   <h1>Family Race Timer <span style="font-size:12px;font-weight:400;opacity:.7">v1.4</span></h1>
   <div id="headerInfo" class="row"></div>
-  <a href="/" style="color:#fff;font-size:14px">Past races</a>
+  <a href="index.html" style="color:#fff;font-size:14px">Home</a>
 </header>
 
 <main>
@@ -75,10 +75,10 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
       <p id="noRacers" class="empty">No racers yet. Add at least one to continue.</p>
     </div>
 
-    <div class="card" id="pinCard">
-      <h2>3. Timekeeper PIN</h2>
-      <p class="sub">Family can see the results from the share link. Anyone with this PIN can change times, so keep it to yourself.</p>
-      <input id="pinInput" placeholder="At least 4 characters" maxlength="20" autocomplete="off">
+    <div class="card">
+      <h2>Timekeeper</h2>
+      <p class="sub">Races are saved to your timekeeper account. Log in on the <a href="index.html">home page</a> first.</p>
+      <p id="whoLine" class="sub" style="margin:0"></p>
     </div>
 
     <div class="row">
@@ -125,12 +125,7 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
     </div>
 
     <div class="viewer-only" style="text-align:center;margin-top:18px">
-      <button id="loginLinkBtn" class="stop-link">Log in as timekeeper</button>
-      <div id="loginBox" class="hidden" style="margin-top:8px">
-        <input id="loginPin" type="password" placeholder="Timekeeper PIN" maxlength="20" autocomplete="off" style="max-width:240px;display:inline-block">
-        <button id="loginBtn" class="small">Log in</button>
-        <p id="loginMsg" class="msg" style="text-align:center"></p>
-      </div>
+      <a href="index.html" class="stop-link" style="font-size:14px;color:var(--muted)">Timekeeper log in</a>
     </div>
   </section>
 </main>
@@ -148,16 +143,14 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
     startedAt: null, // epoch ms when the overall start timer was pressed
     stoppedAt: null, // epoch ms when the race was stopped (freezes the clock)
     finishes: {},    // { racerId: elapsedMs }
-    raceId: null,    // shared race id from Netlify, if this device created or joined one
-    pin: ''          // timekeeper PIN, kept only on the timekeeper's device
+    raceId: null     // shared race id, set once this timekeeper has created or opened the race
   };
 
-  // Viewer mode: opened from a share link (?race=ID). Read-only, refreshes from the server.
-  // A device that already has this race's PIN saved is the timekeeper, not a viewer.
+  // Race links: the timekeeper who owns the race gets the timer; anyone else gets the read-only viewer.
+  // The owner is checked with the server (see startWithLink below).
   var params = new URLSearchParams(location.search);
   var linkRaceId = params.get('race');
-  var viewRaceId = linkRaceId && !(state.raceId === linkRaceId && state.pin) ? linkRaceId : null;
-  if (viewRaceId) document.body.classList.add('viewer');
+  var viewRaceId = null;
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -179,8 +172,19 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
 
   // ---------- shared results (Netlify Function) ----------
   var API = '/.netlify/functions/race';
+  var SESSION_KEY = 'family-race-session';
   var pushTimer = null;
   var lastPushed = '';
+
+  function session() {
+    try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch (e) { return null; }
+  }
+  function authHeaders() {
+    var s = session();
+    var h = { 'Content-Type': 'application/json' };
+    if (s) h.Authorization = 'Bearer ' + s.token;
+    return h;
+  }
 
   function setSync(text) {
     var el = $('syncNote');
@@ -190,14 +194,15 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
 
   // Timekeeper: send the latest state to the server, at most once every half second
   function pushShared() {
-    if (!state.raceId || !state.pin || viewRaceId) return;
+    if (!state.raceId || !session() || viewRaceId) return;
     clearTimeout(pushTimer);
     pushTimer = setTimeout(function () {
-      var body = JSON.stringify({ id: state.raceId, pin: state.pin, state: stateForShare() });
+      var body = JSON.stringify({ id: state.raceId, state: stateForShare() });
       if (body === lastPushed) return;
-      fetch(API, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: body })
+      fetch(API, { method: 'PUT', headers: authHeaders(), body: body })
         .then(function (res) {
-          if (res.status === 403) return setSync('Wrong timekeeper PIN. Results are not being shared.');
+          if (res.status === 401) return setSync('Your log-in has ended. Log in on the home page to keep sharing results.');
+          if (res.status === 403) return setSync('This race belongs to another timekeeper. Results are not being shared.');
           if (!res.ok) return setSync('Could not share results. They are still saved on this device.');
           lastPushed = body;
           setSync('');
@@ -206,17 +211,17 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
     }, 500);
   }
 
-  // Only the race data is shared, never the PIN
+  // Only the race data is shared
   function stateForShare() {
     return { name: state.name, racers: state.racers, startedAt: state.startedAt, stoppedAt: state.stoppedAt, finishes: state.finishes };
   }
 
-  // Creates a shared race on the server and returns its id
-  function createShared(pin) {
+  // Creates a shared race for the logged-in timekeeper and returns its id
+  function createShared() {
     return fetch(API, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'create', pin: pin, state: stateForShare() })
+      headers: authHeaders(),
+      body: JSON.stringify({ action: 'create', state: stateForShare() })
     }).then(function (res) {
       return res.json().then(function (data) {
         if (!res.ok) throw new Error(data.error || 'Could not create race');
@@ -342,23 +347,20 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
       showView();
       return;
     }
-    var pin = $('pinInput').value.trim();
-    if (pin.length < 4) {
-      $('setupMsg').textContent = 'Enter a timekeeper PIN of at least 4 characters first.';
-      $('pinInput').focus();
+    if (!session()) {
+      $('setupMsg').innerHTML = 'Log in as a timekeeper on the <a href="index.html">home page</a> first.';
       return;
     }
     $('goRaceBtn').disabled = true;
     $('setupMsg').textContent = 'Creating the shared race...';
-    createShared(pin).then(function (id) {
+    createShared().then(function (id) {
       state.raceId = id;
-      state.pin = pin;
       state.view = 'race';
       save();
       showView();
     }).catch(function (err) {
       $('goRaceBtn').disabled = false;
-      $('setupMsg').textContent = 'Could not create the shared race: ' + err.message + '. Check the internet connection and try again.';
+      $('setupMsg').textContent = 'Could not create the shared race: ' + err.message + '.';
     });
   });
 
@@ -453,22 +455,22 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
   });
 
   $('publishBtn').addEventListener('click', function () {
-    if (!stopped() || !state.raceId || !state.pin) return;
+    if (!stopped() || !state.raceId || !session()) return;
     var btn = $('publishBtn');
     btn.disabled = true;
     $('publishMsg').textContent = 'Publishing...';
     // Send the latest results first, then publish them
     fetch(API, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: state.raceId, pin: state.pin, state: stateForShare() })
+      headers: authHeaders(),
+      body: JSON.stringify({ id: state.raceId, state: stateForShare() })
     }).then(function (res) {
       if (!res.ok) return res.json().then(function (d) { throw new Error(d.error || 'Save failed'); });
     }).then(function () {
       return fetch(API, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'publish', id: state.raceId, pin: state.pin })
+        headers: authHeaders(),
+        body: JSON.stringify({ action: 'publish', id: state.raceId })
       });
     }).then(function (res) {
       return res.json().then(function (d) {
@@ -550,51 +552,47 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
     if (raceMode) renderRace(); else renderSetup();
   }
 
-  // Viewer: check the PIN, save this race on this device, then reload as the timekeeper
-  function loginTimekeeper() {
-    var pin = $('loginPin').value.trim();
-    if (!pin) { $('loginMsg').textContent = 'Enter the timekeeper PIN.'; return; }
-    $('loginMsg').textContent = 'Checking...';
-    fetch(API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'check', id: viewRaceId, pin: pin })
-    }).then(function (res) {
+  // Opened from a race link: the owner gets the timer, anyone else gets the live viewer
+  function startWithLink(id) {
+    fetch(API + '?id=' + encodeURIComponent(id), { cache: 'no-store' }).then(function (res) {
       return res.json().then(function (d) {
-        if (!res.ok) throw new Error(d.error || 'Could not log in');
+        if (!res.ok) throw new Error(d.error || 'Race not found');
+        return d;
       });
-    }).then(function () {
-      return fetch(API + '?id=' + encodeURIComponent(viewRaceId), { cache: 'no-store' });
-    }).then(function (res) {
-      return res.json();
     }).then(function (d) {
-      // This replaces any race previously saved on this device
-      localStorage.setItem(KEY, JSON.stringify({
-        name: d.state.name, racers: d.state.racers, view: 'race',
-        startedAt: d.state.startedAt, stoppedAt: d.state.stoppedAt, finishes: d.state.finishes,
-        raceId: viewRaceId, pin: pin
-      }));
-      location.href = location.pathname + '?race=' + encodeURIComponent(viewRaceId);
-    }).catch(function (err) {
-      $('loginMsg').textContent = err.message;
+      var s = session();
+      if (s && d.owner && s.username.toLowerCase() === d.owner.toLowerCase()) {
+        if (state.raceId !== id) {
+          state = {
+            name: d.state.name, racers: d.state.racers, view: 'race',
+            startedAt: d.state.startedAt, stoppedAt: d.state.stoppedAt, finishes: d.state.finishes,
+            raceId: id, publishedAt: null
+          };
+          localStorage.setItem(KEY, JSON.stringify(state));
+        }
+        state.view = 'race';
+        showView();
+      } else {
+        openViewer(id);
+      }
+    }).catch(function () {
+      openViewer(id);
+      setSync('Could not find this race. Check the link.');
     });
   }
 
-  $('loginLinkBtn').addEventListener('click', function () {
-    $('loginBox').classList.toggle('hidden');
-    $('loginPin').focus();
-  });
-  $('loginBtn').addEventListener('click', loginTimekeeper);
-  $('loginPin').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') loginTimekeeper();
-  });
+  function openViewer(id) {
+    viewRaceId = id;
+    document.body.classList.add('viewer');
+    $('headerInfo').innerHTML = '<span>Live results</span>';
+    loadViewer();
+  }
 
   // Clock keeps running from the saved start time, so a page reload does not lose it
   setInterval(updateClock, 100);
 
-  if (viewRaceId) {
-    $('headerInfo').innerHTML = '<span>Live results</span>';
-    loadViewer();
+  if (linkRaceId) {
+    startWithLink(linkRaceId);
   } else {
     showView();
   }

@@ -1,0 +1,32 @@
+import { getStore } from "@netlify/blobs";
+import { reply, userFromRequest, sameOwner } from "../lib/auth.mjs";
+
+// The logged-in timekeeper's own races, newest first.
+// GET /.netlify/functions/mine (Authorization: Bearer token)
+// -> { races: [ { id, name, startedAt, stoppedAt, updatedAt, published } ] }
+
+export default async (req) => {
+  const user = await userFromRequest(req);
+  if (!user) return reply(401, { error: "Log in as a timekeeper first" });
+
+  const races = getStore("races");
+  const published = getStore("published");
+  const { blobs } = await races.list();
+  const { blobs: publishedBlobs } = await published.list();
+  const publishedIds = new Set(publishedBlobs.map((b) => b.key));
+
+  const loaded = await Promise.all(blobs.map(async (b) => ({ id: b.key, record: await races.get(b.key, { type: "json" }) })));
+  const mine = loaded
+    .filter((x) => x.record && sameOwner(x.record.owner, user))
+    .map((x) => ({
+      id: x.id,
+      name: x.record.state.name || "Family race",
+      startedAt: x.record.state.startedAt || null,
+      stoppedAt: x.record.state.stoppedAt || null,
+      updatedAt: x.record.updatedAt || 0,
+      published: publishedIds.has(x.id),
+    }))
+    .sort((a, b) => (b.startedAt || b.updatedAt) - (a.startedAt || a.updatedAt));
+
+  return reply(200, { races: mine });
+};

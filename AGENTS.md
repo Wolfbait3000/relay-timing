@@ -4,75 +4,79 @@ Notes for AI agents working on this project. Read this before editing.
 
 ## What this is
 
-A single-page race timer for small family races. The whole app is `index.html` (HTML, CSS, and vanilla JavaScript in one file). There is no build step, no package manager, no framework, and no server. Keep it that way unless the user asks otherwise.
+A family race timer hosted on Netlify. It has three pages and a small set of Netlify Functions:
 
-## Flow the user expects
+- `index.html`: the home page. Two buttons: **Timekeeper** (log in or create an account, then manage your own races) and **Viewer** (type a timekeeper ID to see that timekeeper's published races).
+- `timer.html`: the timer for a race. Runs the overall clock, Finish buttons, Stop race, Publish to home page. Viewers open the same page through a share link and see a read-only live view.
+- `edit.html`: lets a logged-in timekeeper edit a race they own (name, racers, bibs, finish times).
 
-1. **Setup view** (`#setupView`): name the event, register racers (name + unique bib), then "Continue to race".
-2. **Race view** (`#raceView`): one overall "Start race" button starts the clock. Each racer has a "Finish" button that records their elapsed time. Finished racers appear in **Results**, sorted by time with places 1, 2, 3...; unfinished racers appear under **Still on course**.
-3. Racers can be undone (returns them to the course) before or after the race. Editing racers is only allowed before the race starts.
+There is no build step. Pages are plain HTML, CSS, and vanilla JavaScript. Server code lives in `netlify/functions/` and `netlify/lib/`. Storage is Netlify Blobs.
 
-## Code layout inside `index.html`
+## Netlify Functions and storage
 
-- `index.html` is the public home page. It lists published races from `GET /.netlify/functions/results`. It has no timer code.
-- `timer.html` is the timer app (everything described below). Share links are `timer.html?race=ID`. The old root `?race=` links no longer open the timer.
-- `netlify/functions/results.mjs` lists the `published` store, newest first.
-- Publish: the timekeeper's "Publish to home page" button (shown only after the race is stopped) first saves the latest state with PUT, then sends `POST {action:"publish", id, pin}`. The server checks the PIN and `stoppedAt`, then saves a results copy to the `published` store (`buildResults` in `race.mjs`). Publishing again overwrites the copy.
+- `netlify/lib/auth.mjs`: shared helpers. Password hashing (PBKDF2 via `node:crypto`), session tokens, `userFromRequest(req)` (reads `Authorization: Bearer <token>`), and `sameOwner()` (case-insensitive).
+- `netlify/functions/account.mjs`: `GET` returns the signed-in username. `POST` with `action` = `signup`, `login`, or `logout`. Usernames: 5 to 30 characters, letters, numbers, and `_ $ . ! @ # -`. Passwords: at least 6 characters.
+- `netlify/functions/race.mjs`: store `races`. `GET ?id=` returns `{ state, owner }` for anyone with the link. Logged-in actions: `POST {action:"create", state}`, `PUT {id, state}` (owner only; also refreshes an existing published copy when the race is stopped), `POST {action:"publish", id}` (owner only, race must be stopped), `POST {action:"delete", id}` (owner only; removes the race and its published copy).
+- `netlify/functions/results.mjs`: store `published`. `GET ?timekeeper=ID` returns that timekeeper's published races only.
+- `netlify/functions/mine.mjs`: `GET` with a token returns the logged-in timekeeper's races, with a `published` flag.
+- Race record: `races[id] = { owner, state, updatedAt }`. Published record: `published[id] = { id, owner, name, startedAt, publishedAt, finished, dnf }`.
+- Records without an `owner` (races made before v1.5) are ignored everywhere.
+- The timekeeper's login token lives in `localStorage` under `family-race-session` as `{ username, token }`.
+- Keep `package.json` (dependency `@netlify/blobs`) and `netlify.toml` in the repo. Netlify uses them to install and deploy the functions.
+- Functions cannot run locally without `netlify dev`. Test with stubbed `fetch` in the browser, plus a stand-in for the Blobs store in Node.
 
-## Code layout inside `timer.html`
+## Timer page (`timer.html`)
 
-- `<style>`: CSS variables in `:root` (`--go`, `--stop`, `--accent`, medal colors). Mobile breakpoint at 600px.
-- `<body>`: two sections, `#setupView` and `#raceView`, toggled with the `hidden` class.
-- `<script>` (wrapped in an IIFE, `'use strict'`):
-  - `state` is the single source of truth: `{ name, racers: [{id, name, bib}], view, startedAt, stoppedAt, finishes: {racerId: elapsedMs} }`.
-  - `save()` / `load()` persist `state` to `localStorage` under the key `family-race-timer-v1`. Changing the shape of `state` means changing or migrating that key; bump the version suffix if the change would break old saved data.
-  - `elapsed()` is `Date.now() - state.startedAt`. The clock ticks every 100 ms from `setInterval(updateClock, 100)`, so a reload resumes correctly.
-  - `standings()` returns finished racers sorted by time. Places are the index + 1 (ties are not specially handled).
-  - `fmt(ms)` formats as `m:ss.t`, or `h:mm:ss.t` past an hour.
-  - `renderSetup()`, `renderRace()`, and `showView()` rebuild the DOM from `state`. Event handling uses delegation on the lists via `data-remove`, `data-finish`, and `data-undo` attributes.
-  - User text is inserted into HTML through `esc()`. Keep doing that for every value that comes from user input.
+- `state` is the single source of truth: `{ name, racers: [{id, name, bib}], view, startedAt, stoppedAt, finishes: {racerId: elapsedMs}, raceId, publishedAt }`.
+- `save()` persists `state` to `localStorage` under `family-race-timer-v1`, then calls `pushShared()`, which sends the race to the server (PUT, debounced 500 ms). `stateForShare()` decides what is sent. Never send the session token inside the race data.
+- Opening `timer.html?race=ID`: `startWithLink()` asks the server for the owner. If the logged-in username matches, the page becomes the timekeeper's timer. Otherwise `openViewer()` adds `body.viewer`, hides timekeeper-only controls, and polls the server every 3 seconds without saving locally.
+- Viewer-only elements use class `viewer-only` (shown only in viewer mode). Timekeeper-only elements use class `timekeeper-only` (hidden in viewer mode). Finish and Undo buttons are hidden in viewer mode by `[data-finish]` and `[data-undo]`.
+- Publish: the button (shown only when stopped and the device is the timekeeper) sends PUT, then `POST {action:"publish"}`.
 
-## Shared results (Netlify)
+## Home page (`index.html`)
 
-- `netlify/functions/race.mjs` is a Netlify Function that stores each race in Netlify Blobs (store name `races`). Each race is one record: `{ pin, state, updatedAt }`, keyed by an 8-character id.
-- `GET ?id=` returns `{ state }` for anyone with the link. `POST` (action `create`) makes a race with a timekeeper PIN. `PUT` updates a race and needs the matching PIN.
-- Timekeeper: Continue to race creates the shared race and shows a share link `index.html?race=ID`. Every change is pushed to the server (debounced 500 ms). The PIN is stored only in that device's localStorage and is never sent in the shared state.
-- Viewer: opening `?race=ID` sets `body.viewer`, which hides timekeeper-only controls (anything with class `timekeeper-only`, plus Finish and Undo). It polls the server every 3 seconds and never saves locally.
-- Viewer login: the "Log in as timekeeper" link (class `viewer-only`, shown only in viewer mode) sends `POST {action:"check", id, pin}`. On success it saves the race and PIN on that device and reloads. A device with the matching PIN saved is a timekeeper, not a viewer, so `viewRaceId` is only set when the link's race id does not match the saved one.
-- Keep `package.json` (dependency `@netlify/blobs`) and `netlify.toml` in the repo, since Netlify uses them to install and deploy the function.
-- The function cannot run locally without `netlify dev`. Test the page with stubbed `fetch` as well as on the deployed site.
+- Sections: `startPanel`, `viewerPanel`, `loginPanel`, `homePanel`. `show(panel)` switches between them.
+- The home list calls `mine.mjs`. A 401 clears the session and returns to the login form.
+- The viewer lookup calls `results.mjs?timekeeper=ID`. It does not list every timekeeper.
+
+## Editor (`edit.html`)
+
+- Requires a session. The server checks ownership on save (PUT). The page also checks the owner before showing the form.
+- Times accept `m:ss.t`, `h:mm:ss.t`, or seconds such as `62.4`. A blank time means did not finish.
 
 ## Rules when editing
 
-- Keep the page a single HTML file. Shared results are the only part that needs the server.
-- Do not put the PIN in the shared state or in any URL.
+- Keep each page self-contained: no build step, no frameworks, no CDN links that break offline use.
 - Keep the code style: plain `var`/function style, `$()` helper for `getElementById`, short comments only where they help.
-- Keep the big-button, low-typing design: this is used on a phone or laptop by family members, sometimes outdoors.
-- Do not change the Finish behavior to re-time a racer who already has a time. Use Undo first. This prevents accidental double-taps from overwriting times.
-- The bib uniqueness check is case-insensitive and trims whitespace. Keep it.
-- Do not reintroduce a dependency on a server or account.
+- Keep the big-button, low-typing design. Family members use phones and laptops, sometimes outdoors.
+- Do not change Finish to re-time a racer who already has a time. Use Undo first.
+- Escape any user text inserted into HTML with `esc()`.
+- Do not put passwords, tokens, or PINs into URLs or logs.
+- Editing a race in `edit.html` while it is live can be overwritten by the timer page (last write wins). Tell the timekeeper to edit after the race is stopped.
 
 ## Testing
 
 No automated test suite exists. To verify a change:
 
-1. Open `index.html` in a browser (or the task browser with `agent-browser open <path>`).
-2. Add 3+ racers including a duplicate bib (should be rejected).
-3. Start the race, Finish racers in a different order than registered, and confirm the Results order and places.
-4. Undo one result and re-finish it.
-5. Reload the page mid-race and confirm the clock and results are kept.
-6. Download the CSV and check the Place / Bib / Name / Time columns and DNF rows.
-7. Check the browser console for errors.
+1. Test the server rules with a stand-in Blobs store: wrong passwords, other timekeepers' races, publishing before stopping, republishing after edits, delete.
+2. In the browser, use test copies with a stubbed `fetch`:
+   - Home: Viewer ID lookup; Timekeeper log in; the race list.
+   - Timer: owner gets the timer; a signed-out visitor gets the viewer.
+   - Editor: save sends the new name in a PUT.
+3. Check the browser console for errors.
 
 ## Known limits (by design, for now)
 
-- Data lives only in the browser's `localStorage` on that device. There is no sync between phones and laptops.
-- No pause/resume, no lap times, no automatic bib/photo timing, no multi-heat support.
-- Times are recorded when Finish is pressed, so there is human reaction delay. This is accepted for family races.
+- No email or password reset. A forgotten password has to be reset by hand in storage.
+- Two devices logged in as timekeeper for the same live race can overwrite each other (last write wins). Use one timekeeper device at a time.
+- No pause/resume, no lap times, no multi-heat support.
+- Times are recorded when Finish is pressed, so there is human reaction delay.
 
 ## Change log
 
 - v1: Initial version. Event setup, bib registration, overall start clock, per-racer Finish with Undo, sorted places, CSV export, saved in the browser.
-- v1.2: Added a Stop race button. It is a faint underlined link while racers are still out, and a big red button once everyone has finished. Stopping always asks for confirmation. Unfinished racers are marked DNF (shown under "Did not finish"), and the clock freezes via `state.stoppedAt`. Finish buttons lock after stopping. Reset and New event clear `stoppedAt`.
-- v1.3: Shared results on Netlify. Timekeeper PIN, share link `?race=ID`, live read-only viewer that polls every 3 seconds, and a Netlify Function (`netlify/functions/race.mjs`) that stores races in Netlify Blobs.
-- v1.4: Home page at the root lists published races (`netlify/functions/results.mjs`). The timer moved to `timer.html`. Timekeepers can publish a stopped race to the home page with "Publish to home page".- v1.1: Fixed "Add racer" doing nothing when the browser blocks `localStorage`. `save()` now catches the error, the list re-renders before saving, and a warning line (`#storageNote`) appears. Always render from `state` first, then save.
+- v1.1: Fixed "Add racer" doing nothing when the browser blocks `localStorage`. `save()` catches the error, the list re-renders before saving, and a warning line (`#storageNote`) appears. Always render from `state` first, then save.
+- v1.2: Stop race button. Faint link while racers are still out, big red button once everyone has finished. Unfinished racers are marked DNF, and the clock freezes via `state.stoppedAt`.
+- v1.3: Shared live results on Netlify with a timekeeper PIN, a share link, and a live read-only viewer.
+- v1.4: Home page lists published races. Timer moved to `timer.html`. Publish to home page.
+- v1.5: Timekeeper accounts (ID and password) replace the PIN. Home page has Timekeeper and Viewer buttons. Timekeepers manage their own races (open, edit, delete). Viewers see only one timekeeper's published races by ID. Old races without an owner are no longer shown.

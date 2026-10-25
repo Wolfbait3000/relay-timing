@@ -1,24 +1,22 @@
 import { getStore } from "@netlify/blobs";
+import { reply, userFromRequest, sameOwner } from "../lib/auth.mjs";
 
-// Shared race storage. Each race is one saved record:
-//   key = race id, value = { pin, state, updatedAt }
-// GET  /.netlify/functions/race?id=ABC   -> { state }          (anyone with the link)
-// POST /.netlify/functions/race          -> { id }             body: { action: "create", pin, state }
-// PUT  /.netlify/functions/race          -> { ok: true }       body: { id, pin, state }  (timekeeper only)
-// POST /.netlify/functions/race          -> { ok: true }       body: { action: "check", id, pin }  (PIN check only)
+// Races belong to the timekeeper account that created them.
+// Race record:      races[id]     = { owner, state, updatedAt }
+// Published record: published[id] = { id, owner, name, startedAt, publishedAt, finished, dnf }
+//
+// GET  ?id=ID                          -> { state, owner }             (anyone with the link)
+// POST { action: "create", state }     -> { id }                       (timekeeper login)
+// PUT  { id, state }                   -> { ok: true }                 (owner only)
+// POST { action: "publish", id }       -> { ok: true }                 (owner only, race must be stopped)
+// POST { action: "delete", id }        -> { ok: true }                 (owner only)
 
 const MAX_STATE_CHARS = 100000;
-
-const reply = (status, body) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-  });
 
 const newId = () => crypto.randomUUID().replace(/-/g, "").slice(0, 8);
 
 // Public results copy: finishers in place order, then racers who did not finish
-function buildResults(id, race) {
+function buildResults(id, owner, race) {
   const racers = Array.isArray(race.racers) ? race.racers : [];
   const times = race.finishes || {};
   const finished = racers
@@ -29,23 +27,30 @@ function buildResults(id, race) {
   const dnf = racers
     .filter((r) => times[r.id] == null)
     .map((r) => ({ bib: r.bib, name: r.name }));
-  return { id, name: race.name || "Family race", startedAt: race.startedAt, publishedAt: Date.now(), finished, dnf };
+  return { id, owner, name: race.name || "Family race", startedAt: race.startedAt, publishedAt: Date.now(), finished, dnf };
 }
 
+const validState = (state) =>
+  state && typeof state === "object" && JSON.stringify(state).length <= MAX_STATE_CHARS;
+
 export default async (req) => {
-  const store = getStore("races");
+  const races = getStore("races");
+  const published = getStore("published");
 
   if (req.method === "GET") {
     const id = new URL(req.url).searchParams.get("id");
     if (!id) return reply(400, { error: "Missing race id" });
-    const record = await store.get(id, { type: "json" });
-    if (!record) return reply(404, { error: "Race not found" });
-    return reply(200, { state: record.state });
+    const record = await races.get(id, { type: "json" });
+    if (!record || !record.owner) return reply(404, { error: "Race not found" });
+    return reply(200, { state: record.state, owner: record.owner });
   }
 
   if (req.method !== "POST" && req.method !== "PUT") {
     return reply(405, { error: "Method not allowed" });
   }
+
+  const user = await userFromRequest(req);
+  if (!user) return reply(401, { error: "Log in as a timekeeper first" });
 
   let body;
   try {
@@ -54,52 +59,40 @@ export default async (req) => {
     return reply(400, { error: "Body must be JSON" });
   }
 
-  const pin = String(body.pin || "");
-
-  // Check a PIN without changing anything (used by "Log in as timekeeper")
-  if (req.method === "POST" && body.action === "check") {
-    const record = await store.get(String(body.id || ""), { type: "json" });
-    if (!record) return reply(404, { error: "Race not found" });
-    if (record.pin !== pin) return reply(403, { error: "Wrong timekeeper PIN" });
-    return reply(200, { ok: true });
-  }
-
-  // Publish a finished race to the home page (timekeeper only, after the race is stopped)
-  if (req.method === "POST" && body.action === "publish") {
-    const id = String(body.id || "");
-    const record = await store.get(id, { type: "json" });
-    if (!record) return reply(404, { error: "Race not found" });
-    if (record.pin !== pin) return reply(403, { error: "Wrong timekeeper PIN" });
-    if (!record.state.stoppedAt) return reply(409, { error: "Stop the race before publishing" });
-
-    await getStore("published").setJSON(id, buildResults(id, record.state));
-    return reply(200, { ok: true });
-  }
-
-  if (!body.state || typeof body.state !== "object") {
-    return reply(400, { error: "Missing race data" });
-  }
-  if (JSON.stringify(body.state).length > MAX_STATE_CHARS) {
-    return reply(413, { error: "Race data is too large" });
-  }
-
-  if (req.method === "POST") {
-    if (body.action !== "create") return reply(400, { error: "Unknown action" });
-    if (pin.length < 4) return reply(400, { error: "Timekeeper PIN must be at least 4 characters" });
-
+  if (req.method === "POST" && body.action === "create") {
+    if (!validState(body.state)) return reply(400, { error: "Missing or too large race data" });
     let id = newId();
-    while (await store.get(id, { type: "json" })) id = newId();
-    await store.setJSON(id, { pin, state: body.state, updatedAt: Date.now() });
+    while (await races.get(id, { type: "json" })) id = newId();
+    await races.setJSON(id, { owner: user, state: body.state, updatedAt: Date.now() });
     return reply(200, { id });
   }
 
-  // PUT: update an existing race, only with the matching timekeeper PIN
   const id = String(body.id || "");
-  if (!id) return reply(400, { error: "Missing race id" });
-  const record = await store.get(id, { type: "json" });
-  if (!record) return reply(404, { error: "Race not found" });
-  if (record.pin !== pin) return reply(403, { error: "Wrong timekeeper PIN" });
+  const record = id ? await races.get(id, { type: "json" }) : null;
+  if (!record || !record.owner) return reply(404, { error: "Race not found" });
+  if (!sameOwner(record.owner, user)) return reply(403, { error: "This race belongs to another timekeeper" });
 
-  await store.setJSON(id, { pin: record.pin, state: body.state, updatedAt: Date.now() });
-  return reply(200, { ok: true });
+  if (req.method === "PUT") {
+    if (!validState(body.state)) return reply(400, { error: "Missing or too large race data" });
+    await races.setJSON(id, { owner: record.owner, state: body.state, updatedAt: Date.now() });
+    // Keep an already-published copy in step with edits
+    if (body.state.stoppedAt && (await published.get(id, { type: "json" }))) {
+      await published.setJSON(id, buildResults(id, record.owner, body.state));
+    }
+    return reply(200, { ok: true });
+  }
+
+  if (body.action === "publish") {
+    if (!record.state.stoppedAt) return reply(409, { error: "Stop the race before publishing" });
+    await published.setJSON(id, buildResults(id, record.owner, record.state));
+    return reply(200, { ok: true });
+  }
+
+  if (body.action === "delete") {
+    await races.delete(id);
+    await published.delete(id);
+    return reply(200, { ok: true });
+  }
+
+  return reply(400, { error: "Unknown action" });
 };

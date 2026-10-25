@@ -3,19 +3,38 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Family Race Results</title>
+<title>Family Race Timer</title>
 <style>
-:root{--bg:#f4f6f8;--card:#fff;--ink:#1d2430;--muted:#6b7585;--line:#dde2e8;--gold:#c99a06;--silver:#8b949e;--bronze:#b5651d}
+:root{--bg:#f4f6f8;--card:#fff;--ink:#1d2430;--muted:#6b7585;--accent:#1f6feb;--stop:#d1242f;--line:#dde2e8;--gold:#c99a06;--silver:#8b949e;--bronze:#b5651d}
 *{box-sizing:border-box}
 body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
 header{background:var(--ink);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 header h1{font-size:20px;margin:0}
-header a{color:#fff;font-size:14px}
 main{max-width:860px;margin:0 auto;padding:20px}
-.intro{color:var(--muted);font-size:14px;margin:0 0 18px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}
-h2{font-size:18px;margin:0 0 4px}
-.date{color:var(--muted);font-size:14px;margin:0 0 12px}
+h2{font-size:18px;margin:0 0 8px}
+h3{font-size:16px;margin:0 0 4px}
+.sub{color:var(--muted);font-size:14px;margin:0 0 12px}
+button{font:inherit;border:0;border-radius:8px;padding:10px 16px;cursor:pointer;background:var(--accent);color:#fff}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.secondary{background:#e6eaf0;color:var(--ink)}
+button.ghost{background:transparent;color:var(--stop);border:1px solid var(--stop)}
+button.big{font-size:20px;padding:22px;width:100%}
+button.small{padding:6px 10px;font-size:14px}
+input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width:100%}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.msg{color:var(--stop);min-height:20px;font-size:14px;margin:8px 0 0}
+.hidden{display:none!important}
+.empty{color:var(--muted);font-size:15px;padding:12px 0}
+.list{list-style:none;padding:0;margin:0}
+.list li{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.list li:last-child{border-bottom:0}
+.tag{font-size:12px;border-radius:999px;padding:3px 9px;background:#e6eaf0;color:var(--muted)}
+.tag.live{background:#dcfce7;color:#166534}
+.tag.pub{background:#dbeafe;color:#1e40af}
+.grow{flex:1;min-width:160px}
+.date{color:var(--muted);font-size:14px;margin:0 0 10px}
 table{width:100%;border-collapse:collapse}
 td{padding:9px 6px;border-bottom:1px solid var(--line);font-size:16px}
 tr:last-child td{border-bottom:0}
@@ -26,31 +45,97 @@ tr:last-child td{border-bottom:0}
 .bib{background:var(--ink);color:#fff;border-radius:6px;padding:3px 8px;font-weight:700;font-size:14px}
 .time{font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
 .dnf{color:var(--muted);font-size:14px;margin:12px 0 0}
-.empty{color:var(--muted);font-size:15px;padding:12px 0}
+@media (max-width:600px){.grid2{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <header>
-  <h1>Family Race Results</h1>
-  <a href="timer.html">Timekeeper page</a>
+  <h1>Family Race Timer</h1>
+  <div id="whoBox" class="row hidden"><span id="whoName" style="font-size:14px"></span><button id="logoutBtn" class="small secondary">Log out</button></div>
 </header>
 
 <main>
-  <p class="intro">Finished races. A race appears here once the timekeeper publishes it. Races still in progress are only visible through their live link.</p>
-  <div id="races"><p class="empty">Loading races...</p></div>
+  <!-- START: two entry buttons -->
+  <section id="startPanel">
+    <div class="grid2">
+      <div class="card">
+        <h2>Timekeeper</h2>
+        <p class="sub">Create and run races, and manage your own races.</p>
+        <button id="goTimekeeperBtn" class="big">Timekeeper</button>
+      </div>
+      <div class="card">
+        <h2>Viewer</h2>
+        <p class="sub">See published results for a timekeeper.</p>
+        <button id="goViewerBtn" class="big secondary">Viewer</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIEWER: enter a timekeeper ID -->
+  <section id="viewerPanel" class="hidden">
+    <div class="card">
+      <h2>Viewer</h2>
+      <p class="sub">Enter the timekeeper's ID to see their published races.</p>
+      <div class="row">
+        <input id="viewerId" class="grow" placeholder="Timekeeper ID" maxlength="30" autocomplete="off">
+        <button id="showViewerBtn">Show races</button>
+      </div>
+      <p id="viewerMsg" class="msg"></p>
+    </div>
+    <div id="viewerResults"></div>
+    <button id="viewerBackBtn" class="secondary">&larr; Back</button>
+  </section>
+
+  <!-- LOGIN: timekeeper log in or create an account -->
+  <section id="loginPanel" class="hidden">
+    <div class="card">
+      <h2>Timekeeper log in</h2>
+      <p class="sub">Your ID must be more than 4 characters. Letters, numbers, and _ $ . ! @ # - are allowed. Passwords need at least 6 characters.</p>
+      <div class="grid2">
+        <input id="loginUser" placeholder="Timekeeper ID" maxlength="30" autocomplete="username">
+        <input id="loginPass" type="password" placeholder="Password" maxlength="100" autocomplete="current-password">
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="logInBtn">Log in</button>
+        <button id="signUpBtn" class="secondary">Create account</button>
+      </div>
+      <p id="loginMsg" class="msg"></p>
+    </div>
+    <button id="loginBackBtn" class="secondary">&larr; Back</button>
+  </section>
+
+  <!-- HOME: a logged-in timekeeper's races -->
+  <section id="homePanel" class="hidden">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">Your races</h2>
+        <a href="timer.html" style="text-decoration:none"><button>New race</button></a>
+      </div>
+      <p class="sub" style="margin-top:8px">Open a race to time it, edit it, or delete it. Published races also show on the viewer page for your ID.</p>
+      <ul id="myRaces" class="list"></ul>
+      <p id="myRacesEmpty" class="empty hidden">You have no races yet.</p>
+      <p id="homeMsg" class="msg"></p>
+    </div>
+  </section>
 </main>
 
 <script>
 (function () {
   'use strict';
 
+  var API_RACE = '/.netlify/functions/race';
+  var API_ACCOUNT = '/.netlify/functions/account';
+  var API_MINE = '/.netlify/functions/mine';
+  var API_RESULTS = '/.netlify/functions/results';
+  var SESSION_KEY = 'family-race-session';
+
+  function $(id) { return document.getElementById(id); }
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
-  // ms -> "m:ss.t" (or "h:mm:ss.t" past an hour)
   function fmt(ms) {
     var tenths = Math.floor(ms / 100);
     var t = tenths % 10;
@@ -65,6 +150,146 @@ tr:last-child td{border-bottom:0}
     return new Date(ms).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   }
 
+  // ---------- session ----------
+  function getSession() {
+    try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch (e) { return null; }
+  }
+  function setSession(s) { localStorage.setItem(SESSION_KEY, JSON.stringify(s)); }
+  function clearSession() { localStorage.removeItem(SESSION_KEY); }
+  function authHeaders() {
+    var s = getSession();
+    var h = { 'Content-Type': 'application/json' };
+    if (s) h.Authorization = 'Bearer ' + s.token;
+    return h;
+  }
+
+  // ---------- panels ----------
+  function show(panel) {
+    ['startPanel', 'viewerPanel', 'loginPanel', 'homePanel'].forEach(function (id) {
+      $(id).classList.toggle('hidden', id !== panel);
+    });
+  }
+
+  function showStart() {
+    show('startPanel');
+    var s = getSession();
+    $('whoBox').classList.toggle('hidden', !s);
+    $('whoName').textContent = s ? 'Logged in as ' + s.username : '';
+  }
+
+  function showHome() {
+    var s = getSession();
+    if (!s) return showLogin();
+    show('homePanel');
+    $('whoBox').classList.remove('hidden');
+    $('whoName').textContent = 'Logged in as ' + s.username;
+    loadMyRaces();
+  }
+
+  function showLogin() {
+    show('loginPanel');
+    $('loginMsg').textContent = '';
+  }
+
+  function showViewer() {
+    show('viewerPanel');
+    $('viewerMsg').textContent = '';
+    $('viewerResults').innerHTML = '';
+    $('viewerId').focus();
+  }
+
+  // ---------- login ----------
+  function auth(action) {
+    var username = $('loginUser').value.trim();
+    var password = $('loginPass').value;
+    if (!username || !password) { $('loginMsg').textContent = 'Enter your ID and password.'; return; }
+    $('loginMsg').textContent = 'Working...';
+    fetch(API_ACCOUNT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: action, username: username, password: password })
+    }).then(function (res) {
+      return res.json().then(function (d) {
+        if (!res.ok) throw new Error(d.error || 'Could not log in');
+        return d;
+      });
+    }).then(function (d) {
+      setSession({ username: d.username, token: d.token });
+      $('loginPass').value = '';
+      showHome();
+    }).catch(function (err) {
+      $('loginMsg').textContent = err.message;
+    });
+  }
+
+  $('logInBtn').addEventListener('click', function () { auth('login'); });
+  $('signUpBtn').addEventListener('click', function () { auth('signup'); });
+  $('loginPass').addEventListener('keydown', function (e) { if (e.key === 'Enter') auth('login'); });
+
+  $('logoutBtn').addEventListener('click', function () {
+    fetch(API_ACCOUNT, { method: 'POST', headers: authHeaders(), body: JSON.stringify({ action: 'logout' }) })
+      .catch(function () {})
+      .then(function () {
+        clearSession();
+        showStart();
+      });
+  });
+
+  // ---------- timekeeper home ----------
+  function loadMyRaces() {
+    $('homeMsg').textContent = '';
+    fetch(API_MINE, { cache: 'no-store', headers: authHeaders() }).then(function (res) {
+      return res.json().then(function (d) {
+        if (res.status === 401) {
+          clearSession();
+          showLogin();
+          $('loginMsg').textContent = 'Please log in again.';
+          throw new Error('signed out');
+        }
+        if (!res.ok) throw new Error(d.error || 'Could not load your races');
+        return d;
+      });
+    }).then(function (d) {
+      var races = d.races || [];
+      $('myRacesEmpty').classList.toggle('hidden', races.length > 0);
+      $('myRaces').innerHTML = races.map(function (r) {
+        var status = !r.stoppedAt
+          ? '<span class="tag live">Live</span>'
+          : (r.published ? '<span class="tag pub">Published</span>' : '<span class="tag">Finished, not published</span>');
+        return '<li>' +
+          '<div class="grow"><h3>' + esc(r.name) + '</h3>' +
+          '<p class="date" style="margin:0">' + esc(dateText(r.startedAt || r.updatedAt)) + '</p></div>' +
+          status +
+          '<div class="row">' +
+          '<a href="timer.html?race=' + encodeURIComponent(r.id) + '"><button class="small">Open</button></a>' +
+          '<a href="edit.html?race=' + encodeURIComponent(r.id) + '"><button class="small secondary">Edit</button></a>' +
+          '<button class="small ghost" data-delete="' + esc(r.id) + '" data-name="' + esc(r.name) + '">Delete</button>' +
+          '</div></li>';
+      }).join('');
+    }).catch(function (err) {
+      if (err.message !== 'signed out') $('homeMsg').textContent = err.message;
+    });
+  }
+
+  $('myRaces').addEventListener('click', function (e) {
+    var id = e.target.getAttribute('data-delete');
+    if (!id) return;
+    var name = e.target.getAttribute('data-name');
+    if (!confirm('Delete "' + name + '"? This removes it from your races, the viewer page, and its live link.')) return;
+    fetch(API_RACE, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ action: 'delete', id: id })
+    }).then(function (res) {
+      return res.json().then(function (d) {
+        if (!res.ok) throw new Error(d.error || 'Could not delete');
+      });
+    }).then(loadMyRaces).catch(function (err) {
+      $('homeMsg').textContent = 'Could not delete: ' + err.message;
+    });
+  });
+
+  // ---------- viewer ----------
   function renderRace(race) {
     var rows = race.finished.map(function (r) {
       var cls = r.place <= 3 ? ' p' + r.place : '';
@@ -75,37 +300,49 @@ tr:last-child td{border-bottom:0}
         '<td class="time">' + fmt(r.ms) + '</td>' +
         '</tr>';
     }).join('');
-
     var dnf = race.dnf && race.dnf.length
       ? '<p class="dnf">Did not finish: ' + race.dnf.map(function (r) {
           return esc(r.name) + ' (#' + esc(r.bib) + ')';
         }).join(', ') + '</p>'
       : '';
-
     return '<section class="card">' +
       '<h2>' + esc(race.name) + '</h2>' +
       '<p class="date">' + esc(dateText(race.startedAt || race.publishedAt)) + '</p>' +
       (rows ? '<table>' + rows + '</table>' : '<p class="empty">No finishers.</p>') +
-      dnf +
-      '</section>';
+      dnf + '</section>';
   }
 
-  fetch('/.netlify/functions/results', { cache: 'no-store' })
-    .then(function (res) {
-      if (!res.ok) throw new Error('Could not load results');
-      return res.json();
-    })
-    .then(function (data) {
-      var races = data.races || [];
-      $('races').innerHTML = races.length
+  function showViewerRaces() {
+    var id = $('viewerId').value.trim();
+    if (!id) { $('viewerMsg').textContent = 'Enter a timekeeper ID.'; return; }
+    $('viewerMsg').textContent = 'Loading...';
+    fetch(API_RESULTS + '?timekeeper=' + encodeURIComponent(id), { cache: 'no-store' }).then(function (res) {
+      return res.json().then(function (d) {
+        if (!res.ok) throw new Error(d.error || 'Could not load races');
+        return d;
+      });
+    }).then(function (d) {
+      var races = d.races || [];
+      $('viewerMsg').textContent = '';
+      $('viewerResults').innerHTML = races.length
         ? races.map(renderRace).join('')
-        : '<p class="empty">No published races yet.</p>';
-    })
-    .catch(function () {
-      $('races').innerHTML = '<p class="empty">Could not load results. Try refreshing the page.</p>';
+        : '<p class="empty">No published races for this ID yet.</p>';
+    }).catch(function (err) {
+      $('viewerMsg').textContent = err.message;
     });
+  }
 
-  function $(id) { return document.getElementById(id); }
+  $('showViewerBtn').addEventListener('click', showViewerRaces);
+  $('viewerId').addEventListener('keydown', function (e) { if (e.key === 'Enter') showViewerRaces(); });
+
+  // ---------- buttons ----------
+  $('goTimekeeperBtn').addEventListener('click', showHome);
+  $('goViewerBtn').addEventListener('click', showViewer);
+  $('viewerBackBtn').addEventListener('click', showStart);
+  $('loginBackBtn').addEventListener('click', showStart);
+
+  // A saved sign-in is checked when the home page loads; a stale one is cleared by the races request
+  showStart();
 })();
 </script>
 </body>

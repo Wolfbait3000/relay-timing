@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Edit Race</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--ink:#1d2430;--muted:#6b7585;--accent:#1f6feb;--stop:#d1242f;--line:#dde2e8;--good:#166534}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--ink);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{font-size:20px;margin:0}
+header a{color:#fff;font-size:14px}
+main{max-width:860px;margin:0 auto;padding:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}
+h2{font-size:18px;margin:0 0 12px}
+.sub{color:var(--muted);font-size:14px;margin:0 0 12px}
+button{font:inherit;border:0;border-radius:8px;padding:10px 16px;cursor:pointer;background:var(--accent);color:#fff}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.secondary{background:#e6eaf0;color:var(--ink)}
+button.ghost{background:transparent;color:var(--stop);border:1px solid var(--stop)}
+button.small{padding:6px 10px;font-size:14px}
+input{font:inherit;padding:9px;border:1px solid #c4cbd5;border-radius:8px;width:100%}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:13px;color:var(--muted);font-weight:600;padding:0 6px 8px}
+td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.msg{font-size:14px;min-height:20px;margin:10px 0 0;color:var(--stop)}
+.ok{color:var(--good)}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>Edit race</h1>
+  <a href="index.html">Home</a>
+</header>
+
+<main>
+  <div id="notice" class="card hidden"></div>
+
+  <div id="editor" class="hidden">
+    <div class="card">
+      <h2>Race name</h2>
+      <input id="raceName" maxlength="80" placeholder="Race name">
+    </div>
+
+    <div class="card">
+      <h2>Racers and times</h2>
+      <p class="sub">Times are minutes:seconds.tenths, like 1:02.4. Leave the time blank for someone who did not finish.</p>
+      <table>
+        <thead><tr><th>Bib</th><th>Name</th><th>Finish time</th><th></th></tr></thead>
+        <tbody id="racerRows"></tbody>
+      </table>
+      <div class="row" style="margin-top:12px">
+        <button id="addRacerBtn" class="secondary">Add racer</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <button id="saveBtn">Save changes</button>
+      <span id="saveMsg" class="msg"></span>
+    </div>
+    <p class="sub" style="margin-top:12px">If this race is already published, saving updates the copy on the viewer page too.</p>
+  </div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var API_RACE = '/.netlify/functions/race';
+  var SESSION_KEY = 'family-race-session';
+
+  var raceId = new URLSearchParams(location.search).get('race');
+  var raceState = null;
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function fmt(ms) {
+    var tenths = Math.floor(ms / 100);
+    var t = tenths % 10;
+    var totalSec = Math.floor(tenths / 10);
+    var s = totalSec % 60;
+    var m = Math.floor(totalSec / 60) % 60;
+    var h = Math.floor(totalSec / 3600);
+    return h ? h + ':' + pad(m) + ':' + pad(s) + '.' + t : m + ':' + pad(s) + '.' + t;
+  }
+  // "m:ss.t", "h:mm:ss.t", "ss.t" -> ms. Blank -> null (did not finish). Invalid -> NaN.
+  function parseTime(text) {
+    var t = String(text).trim();
+    if (!t) return null;
+    var m;
+    if ((m = t.match(/^(\d+):(\d{1,2})(?:\.(\d+))?$/))) {
+      // m:ss.t
+      if (+m[2] >= 60) return NaN;
+      return Math.round((+m[1] * 60 + +m[2] + (m[3] ? +('0.' + m[3]) : 0)) * 1000);
+    }
+    if ((m = t.match(/^(\d+):(\d{1,2}):(\d{1,2})(?:\.(\d+))?$/))) {
+      // h:mm:ss.t
+      if (+m[2] >= 60 || +m[3] >= 60) return NaN;
+      return Math.round((+m[1] * 3600 + +m[2] * 60 + +m[3] + (m[4] ? +('0.' + m[4]) : 0)) * 1000);
+    }
+    if ((m = t.match(/^(\d+)(?:\.(\d+))?$/))) {
+      // seconds only, e.g. 62.4
+      return Math.round((+m[1] + (m[2] ? +('0.' + m[2]) : 0)) * 1000);
+    }
+    return NaN;
+  }
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  function notice(text) {
+    $('notice').textContent = text;
+    $('notice').classList.remove('hidden');
+    $('editor').classList.add('hidden');
+  }
+
+  function session() {
+    try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch (e) { return null; }
+  }
+
+  function rowHtml(r) {
+    var time = r.ms != null ? fmt(r.ms) : '';
+    return '<tr data-id="' + esc(r.id) + '">' +
+      '<td style="width:90px"><input class="bib" value="' + esc(r.bib) + '" maxlength="8"></td>' +
+      '<td><input class="name" value="' + esc(r.name) + '" maxlength="40"></td>' +
+      '<td style="width:150px"><input class="time" value="' + esc(time) + '" placeholder="did not finish" maxlength="12"></td>' +
+      '<td style="width:80px"><button class="small ghost remove">Remove</button></td>' +
+      '</tr>';
+  }
+
+  function addRow(r) {
+    $('racerRows').insertAdjacentHTML('beforeend', rowHtml(r));
+  }
+
+  $('racerRows').addEventListener('click', function (e) {
+    if (e.target.classList.contains('remove')) e.target.closest('tr').remove();
+  });
+
+  $('addRacerBtn').addEventListener('click', function () {
+    addRow({ id: uid(), bib: '', name: '', ms: null });
+    var rows = $('racerRows').querySelectorAll('tr');
+    rows[rows.length - 1].querySelector('.bib').focus();
+  });
+
+  function load() {
+    if (!raceId) return notice('No race selected. Go back to Home and open a race from Your races.');
+    var s = session();
+    if (!s) return notice('Log in as a timekeeper first. Go to Home and choose Timekeeper.');
+
+    fetch(API_RACE + '?id=' + encodeURIComponent(raceId), { cache: 'no-store' }).then(function (res) {
+      return res.json().then(function (d) {
+        if (!res.ok) throw new Error(d.error || 'Race not found');
+        return d;
+      });
+    }).then(function (d) {
+      if (d.owner.toLowerCase() !== s.username.toLowerCase()) {
+        return notice('This race belongs to another timekeeper, so you cannot edit it.');
+      }
+      raceState = d.state;
+      $('raceName').value = d.state.name || '';
+      (d.state.racers || []).forEach(function (r) {
+        addRow({ id: r.id, bib: r.bib, name: r.name, ms: (d.state.finishes || {})[r.id] != null ? d.state.finishes[r.id] : null });
+      });
+      $('notice').classList.add('hidden');
+      $('editor').classList.remove('hidden');
+    }).catch(function (err) {
+      notice('Could not load this race: ' + err.message);
+    });
+  }
+
+  $('saveBtn').addEventListener('click', function () {
+    var s = session();
+    if (!s || !raceState) return;
+
+    var racers = [];
+    var finishes = {};
+    var bibs = {};
+    var error = '';
+    var rows = $('racerRows').querySelectorAll('tr');
+
+    rows.forEach(function (tr) {
+      if (error) return;
+      var id = tr.getAttribute('data-id');
+      var bib = tr.querySelector('.bib').value.trim();
+      var name = tr.querySelector('.name').value.trim();
+      var ms = parseTime(tr.querySelector('.time').value);
+      if (!name) { error = 'Every racer needs a name.'; return; }
+      if (!bib) { error = 'Every racer needs a bib number.'; return; }
+      if (bibs[bib.toLowerCase()]) { error = 'Bib #' + bib + ' is used more than once.'; return; }
+      if (isNaN(ms)) { error = 'Check the time for ' + name + '. Use m:ss.t, like 1:02.4.'; return; }
+      bibs[bib.toLowerCase()] = true;
+      racers.push({ id: id, name: name, bib: bib });
+      if (ms !== null) finishes[id] = ms;
+    });
+
+    if (error) { $('saveMsg').className = 'msg'; $('saveMsg').textContent = error; return; }
+
+    var next = {
+      name: $('raceName').value.trim() || 'Family race',
+      racers: racers,
+      startedAt: raceState.startedAt || null,
+      stoppedAt: raceState.stoppedAt || null,
+      finishes: finishes
+    };
+
+    $('saveBtn').disabled = true;
+    $('saveMsg').className = 'msg';
+    $('saveMsg').textContent = 'Saving...';
+    fetch(API_RACE, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + s.token },
+      body: JSON.stringify({ id: raceId, state: next })
+    }).then(function (res) {
+      return res.json().then(function (d) {
+        if (!res.ok) throw new Error(d.error || 'Could not save');
+      });
+    }).then(function () {
+      raceState = next;
+      $('saveMsg').className = 'msg ok';
+      $('saveMsg').textContent = 'Saved.';
+    }).catch(function (err) {
+      $('saveMsg').className = 'msg';
+      $('saveMsg').textContent = 'Could not save: ' + err.message;
+    }).then(function () {
+      $('saveBtn').disabled = false;
+    });
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>
