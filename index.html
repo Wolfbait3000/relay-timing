@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Family Race Timer</title>
+<title>Relay Timing</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
 <style>
 :root{--bg:#f4f6f8;--card:#fff;--ink:#1d2430;--muted:#6b7585;--accent:#1f6feb;--stop:#d1242f;--line:#dde2e8;--gold:#c99a06;--silver:#8b949e;--bronze:#b5651d}
 *{box-sizing:border-box}
@@ -45,12 +46,13 @@ tr:last-child td{border-bottom:0}
 .bib{background:var(--ink);color:#fff;border-radius:6px;padding:3px 8px;font-weight:700;font-size:14px}
 .time{font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
 .dnf{color:var(--muted);font-size:14px;margin:12px 0 0}
+.pace{color:var(--muted);font-size:14px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 @media (max-width:600px){.grid2{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <header>
-  <h1>Family Race Timer</h1>
+  <h1 style="display:flex;align-items:center;gap:10px"><img src="logo.svg" alt="" width="28" height="28" style="background:#fff;border-radius:7px;padding:3px"> Relay Timing</h1>
   <div id="whoBox" class="row hidden"><span id="whoName" style="font-size:14px"></span><button id="logoutBtn" class="small secondary">Log out</button></div>
 </header>
 
@@ -119,6 +121,7 @@ tr:last-child td{border-bottom:0}
   </section>
 </main>
 
+<script src="pace.js"></script>
 <script>
 (function () {
   'use strict';
@@ -298,6 +301,7 @@ tr:last-child td{border-bottom:0}
         '<td style="width:70px"><span class="bib">#' + esc(r.bib) + '</span></td>' +
         '<td>' + esc(r.name) + '</td>' +
         '<td class="time">' + fmt(r.ms) + '</td>' +
+        '<td class="pace">' + (race.showPace && race.distance ? esc(RelayPace.pace(r.ms, race.distance, race.distUnit, race.paceUnit)) : '') + '</td>' +
         '</tr>';
     }).join('');
     var dnf = race.dnf && race.dnf.length
@@ -308,6 +312,7 @@ tr:last-child td{border-bottom:0}
     return '<section class="card">' +
       '<h2>' + esc(race.name) + '</h2>' +
       '<p class="date">' + esc(dateText(race.startedAt || race.publishedAt)) + '</p>' +
+      (race.distance ? '<p class="date">Race length: ' + esc(race.distance) + ' ' + (race.distUnit === 'km' ? 'km' : 'miles') + '</p>' : '') +
       (rows ? '<table>' + rows + '</table>' : '<p class="empty">No finishers.</p>') +
       dnf + '</section>';
   }

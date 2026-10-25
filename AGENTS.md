@@ -27,7 +27,7 @@ There is no build step. Pages are plain HTML, CSS, and vanilla JavaScript. Serve
 
 ## Timer page (`timer.html`)
 
-- `state` is the single source of truth: `{ name, racers: [{id, name, bib}], view, startedAt, stoppedAt, finishes: {racerId: elapsedMs}, raceId, publishedAt }`.
+- `state` is the single source of truth: `{ name, racers: [{id, name, bib}], view, startedAt, stoppedAt, finishes: {racerId: elapsedMs}, raceId, publishedAt, distance, distUnit ('mi' or 'km'), showPace, paceUnit ('min/mi', 'min/km', 'mph', 'km/h') }`.
 - `save()` persists `state` to `localStorage` under `family-race-timer-v1`, then calls `pushShared()`, which sends the race to the server (PUT, debounced 500 ms). `stateForShare()` decides what is sent. Never send the session token inside the race data.
 - Opening `timer.html?race=ID`: `startWithLink()` asks the server for the owner. If the logged-in username matches, the page becomes the timekeeper's timer. Otherwise `openViewer()` adds `body.viewer`, hides timekeeper-only controls, and polls the server every 3 seconds without saving locally.
 - Viewer-only elements use class `viewer-only` (shown only in viewer mode). Timekeeper-only elements use class `timekeeper-only` (hidden in viewer mode). Finish and Undo buttons are hidden in viewer mode by `[data-finish]` and `[data-undo]`.
@@ -79,4 +79,5 @@ No automated test suite exists. To verify a change:
 - v1.2: Stop race button. Faint link while racers are still out, big red button once everyone has finished. Unfinished racers are marked DNF, and the clock freezes via `state.stoppedAt`.
 - v1.3: Shared live results on Netlify with a timekeeper PIN, a share link, and a live read-only viewer.
 - v1.4: Home page lists published races. Timer moved to `timer.html`. Publish to home page.
+- v1.6: Renamed to Relay Timing with a stopwatch logo (`logo.svg`, also the browser icon). Race details: race length with a miles or km unit, and an optional pace column (minutes per mile or km, mph, or km/h). Details are stored in the race state and copied into published results. Pace is calculated by `pace.js` (`RelayPace`), shared by every page.
 - v1.5: Timekeeper accounts (ID and password) replace the PIN. Home page has Timekeeper and Viewer buttons. Timekeepers manage their own races (open, edit, delete). Viewers see only one timekeeper's published races by ID. Old races without an owner are no longer shown.

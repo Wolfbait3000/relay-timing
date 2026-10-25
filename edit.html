@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Edit Race</title>
+<title>Edit race · Relay Timing</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
 <style>
 :root{--bg:#f4f6f8;--card:#fff;--ink:#1d2430;--muted:#6b7585;--accent:#1f6feb;--stop:#d1242f;--line:#dde2e8;--good:#166534}
 *{box-sizing:border-box}
@@ -28,11 +29,17 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
 .msg{font-size:14px;min-height:20px;margin:10px 0 0;color:var(--stop)}
 .ok{color:var(--good)}
 .hidden{display:none!important}
+.details{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.field{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted);flex:1;min-width:140px}
+.field input,.field select{font:inherit;color:var(--ink);padding:9px;border:1px solid #c4cbd5;border-radius:8px;width:100%;background:#fff}
+.check{display:flex;align-items:center;gap:8px;font-size:15px;margin-bottom:10px}
+.pace{color:var(--muted);font-size:14px;min-width:80px;text-align:right;font-variant-numeric:tabular-nums}
+.check input{width:auto;margin:0}
 </style>
 </head>
 <body>
 <header>
-  <h1>Edit race</h1>
+  <h1 style="display:flex;align-items:center;gap:10px"><img src="logo.svg" alt="" width="26" height="26" style="background:#fff;border-radius:7px;padding:3px"> Edit race</h1>
   <a href="index.html">Home</a>
 </header>
 
@@ -43,6 +50,33 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
     <div class="card">
       <h2>Race name</h2>
       <input id="raceName" maxlength="80" placeholder="Race name">
+    </div>
+
+    <div class="card">
+      <h2>Race details</h2>
+      <div class="details">
+        <label class="field">Race length
+          <input id="distInput" type="number" min="0" step="0.01" placeholder="e.g. 5" inputmode="decimal">
+        </label>
+        <label class="field">Unit
+          <select id="distUnit">
+            <option value="mi">Miles</option>
+            <option value="km">Kilometers</option>
+          </select>
+        </label>
+      </div>
+      <label class="check"><input type="checkbox" id="showPace"> Show pace</label>
+      <div id="paceRow" class="details hidden">
+        <label class="field">Pace unit
+          <select id="paceUnit">
+            <option value="min/mi">Minutes per mile</option>
+            <option value="min/km">Minutes per km</option>
+            <option value="mph">Miles per hour</option>
+            <option value="km/h">Kilometers per hour</option>
+          </select>
+        </label>
+      </div>
+      <p class="sub" style="margin:0">Pace is worked out from the race length and each finish time.</p>
     </div>
 
     <div class="card">
@@ -148,6 +182,22 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
     rows[rows.length - 1].querySelector('.bib').focus();
   });
 
+  // Race details (length and pace)
+  function setDetailsInputs(s) {
+    $('distInput').value = s.distance || '';
+    $('distUnit').value = s.distUnit || 'mi';
+    $('showPace').checked = !!s.showPace;
+    $('paceUnit').value = s.paceUnit || 'min/mi';
+    $('paceRow').classList.toggle('hidden', !s.showPace);
+  }
+  $('showPace').addEventListener('change', function () {
+    $('paceRow').classList.toggle('hidden', !this.checked);
+  });
+  function readDistance() {
+    var d = parseFloat($('distInput').value);
+    return d > 0 ? d : null;
+  }
+
   function load() {
     if (!raceId) return notice('No race selected. Go back to Home and open a race from Your races.');
     var s = session();
@@ -163,6 +213,7 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
         return notice('This race belongs to another timekeeper, so you cannot edit it.');
       }
       raceState = d.state;
+      setDetailsInputs(d.state);
       $('raceName').value = d.state.name || '';
       (d.state.racers || []).forEach(function (r) {
         addRow({ id: r.id, bib: r.bib, name: r.name, ms: (d.state.finishes || {})[r.id] != null ? d.state.finishes[r.id] : null });
@@ -206,7 +257,11 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
       racers: racers,
       startedAt: raceState.startedAt || null,
       stoppedAt: raceState.stoppedAt || null,
-      finishes: finishes
+      finishes: finishes,
+      distance: readDistance(),
+      distUnit: $('distUnit').value,
+      showPace: $('showPace').checked,
+      paceUnit: $('paceUnit').value
     };
 
     $('saveBtn').disabled = true;

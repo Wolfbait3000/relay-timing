@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Family Race Timer</title>
+<title>Relay Timing</title>
+<link rel="icon" href="logo.svg" type="image/svg+xml">
 <style>
 :root{--bg:#f4f6f8;--card:#fff;--ink:#1d2430;--muted:#6b7585;--accent:#1f6feb;--go:#2da44e;--stop:#d1242f;--line:#dde2e8;--gold:#c99a06;--silver:#8b949e;--bronze:#b5651d}
 *{box-sizing:border-box}
@@ -44,11 +45,17 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
 .hidden{display:none!important}
 .sub{color:var(--muted);font-size:14px;margin:0 0 12px}
 @media (max-width:600px){.add-form{grid-template-columns:1fr 90px}.add-form button{grid-column:1/-1}.clock{font-size:52px}}
+.details{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.field{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted);flex:1;min-width:140px}
+.field input,.field select{font:inherit;color:var(--ink);padding:9px;border:1px solid #c4cbd5;border-radius:8px;width:100%;background:#fff}
+.check{display:flex;align-items:center;gap:8px;font-size:15px;margin-bottom:10px}
+.pace{color:var(--muted);font-size:14px;min-width:80px;text-align:right;font-variant-numeric:tabular-nums}
+.check input{width:auto;margin:0}
 </style>
 </head>
 <body>
 <header>
-  <h1>Family Race Timer <span style="font-size:12px;font-weight:400;opacity:.7">v1.4</span></h1>
+  <h1 style="display:flex;align-items:center;gap:10px"><img src="logo.svg" alt="" width="28" height="28" style="background:#fff;border-radius:7px;padding:3px"> Relay Timing <span style="font-size:12px;font-weight:400;opacity:.7">v1.6</span></h1>
   <div id="headerInfo" class="row"></div>
   <a href="index.html" style="color:#fff;font-size:14px">Home</a>
 </header>
@@ -76,6 +83,33 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
     </div>
 
     <div class="card">
+      <h2>Race details</h2>
+      <div class="details">
+        <label class="field">Race length
+          <input id="distInput" type="number" min="0" step="0.01" placeholder="e.g. 5" inputmode="decimal">
+        </label>
+        <label class="field">Unit
+          <select id="distUnit">
+            <option value="mi">Miles</option>
+            <option value="km">Kilometers</option>
+          </select>
+        </label>
+      </div>
+      <label class="check"><input type="checkbox" id="showPace"> Show pace</label>
+      <div id="paceRow" class="details hidden">
+        <label class="field">Pace unit
+          <select id="paceUnit">
+            <option value="min/mi">Minutes per mile</option>
+            <option value="min/km">Minutes per km</option>
+            <option value="mph">Miles per hour</option>
+            <option value="km/h">Kilometers per hour</option>
+          </select>
+        </label>
+      </div>
+      <p class="sub" style="margin:0">Pace is worked out from the race length and each finish time.</p>
+    </div>
+
+    <div class="card">
       <h2>Timekeeper</h2>
       <p class="sub">Races are saved to your timekeeper account. Log in on the <a href="index.html">home page</a> first.</p>
       <p id="whoLine" class="sub" style="margin:0"></p>
@@ -90,6 +124,7 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
   <section id="raceView" class="hidden">
     <div class="card">
       <div class="clock" id="clock">0:00.0</div>
+      <p id="raceInfo" class="sub" style="text-align:center;margin:4px 0 0"></p>
       <div class="row" style="justify-content:center">
         <button id="startBtn" class="go timekeeper-only">Start race</button>
       </div>
@@ -130,6 +165,7 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
   </section>
 </main>
 
+<script src="pace.js"></script>
 <script>
 (function () {
   'use strict';
@@ -143,7 +179,11 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
     startedAt: null, // epoch ms when the overall start timer was pressed
     stoppedAt: null, // epoch ms when the race was stopped (freezes the clock)
     finishes: {},    // { racerId: elapsedMs }
-    raceId: null     // shared race id, set once this timekeeper has created or opened the race
+    raceId: null,    // shared race id, set once this timekeeper has created or opened the race
+    distance: null,  // race length, or null
+    distUnit: 'mi',  // 'mi' or 'km'
+    showPace: false, // show pace in the results
+    paceUnit: 'min/mi'
   };
 
   // Race links: the timekeeper who owns the race gets the timer; anyone else gets the read-only viewer.
@@ -213,7 +253,8 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
 
   // Only the race data is shared
   function stateForShare() {
-    return { name: state.name, racers: state.racers, startedAt: state.startedAt, stoppedAt: state.stoppedAt, finishes: state.finishes };
+    return { name: state.name, racers: state.racers, startedAt: state.startedAt, stoppedAt: state.stoppedAt, finishes: state.finishes,
+      distance: state.distance, distUnit: state.distUnit, showPace: state.showPace, paceUnit: state.paceUnit };
   }
 
   // Creates a shared race for the logged-in timekeeper and returns its id
@@ -244,6 +285,10 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
           state.startedAt = data.state.startedAt;
           state.stoppedAt = data.state.stoppedAt;
           state.finishes = data.state.finishes;
+          state.distance = data.state.distance;
+          state.distUnit = data.state.distUnit;
+          state.showPace = data.state.showPace;
+          state.paceUnit = data.state.paceUnit;
           state.view = 'race';
           $('setupView').classList.add('hidden');
           $('raceView').classList.remove('hidden');
@@ -293,7 +338,40 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
   }
 
   // ---------- setup view ----------
+  // ---------- race details (length and pace) ----------
+  function syncDetailsInputs() {
+    $('distInput').value = state.distance || '';
+    $('distUnit').value = state.distUnit || 'mi';
+    $('showPace').checked = !!state.showPace;
+    $('paceUnit').value = state.paceUnit || 'min/mi';
+    $('paceRow').classList.toggle('hidden', !state.showPace);
+  }
+  function readDetails() {
+    var d = parseFloat($('distInput').value);
+    state.distance = d > 0 ? d : null;
+    state.distUnit = $('distUnit').value;
+    state.showPace = $('showPace').checked;
+    state.paceUnit = $('paceUnit').value;
+    $('paceRow').classList.toggle('hidden', !state.showPace);
+    save();
+    if (state.view === 'race') renderRace();
+  }
+  $('distInput').addEventListener('input', readDetails);
+  ['distUnit', 'showPace', 'paceUnit'].forEach(function (id) {
+    $(id).addEventListener('change', readDetails);
+  });
+  function raceInfoText() {
+    if (!state.distance) return state.showPace ? 'Add a race length to show pace.' : '';
+    var unit = state.distUnit === 'km' ? 'km' : 'miles';
+    return 'Race length: ' + state.distance + ' ' + unit + (state.showPace ? ' · pace in ' + RelayPace.label(state.paceUnit) : '');
+  }
+  function paceCell(ms) {
+    if (!state.showPace || !state.distance) return '';
+    return '<span class="pace">' + esc(RelayPace.pace(ms, state.distance, state.distUnit, state.paceUnit)) + '</span>';
+  }
+
   function renderSetup() {
+    syncDetailsInputs();
     $('eventName').value = state.name;
     var list = $('racerList');
     list.innerHTML = state.racers.map(function (r) {
@@ -372,6 +450,7 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
   function renderRace() {
     var name = state.name || 'Race';
     $('headerInfo').innerHTML = '<span>' + esc(name) + '</span>';
+    $('raceInfo').textContent = raceInfoText();
     $('startBtn').disabled = started();
     $('startBtn').textContent = started() ? 'Race started' : 'Start race';
     $('editBtn').classList.toggle('hidden', started());
@@ -404,7 +483,7 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
       return '<li><span class="place' + cls + '">' + place + '</span>' +
              '<span class="bib">#' + esc(d.racer.bib) + '</span>' +
              '<span class="name">' + esc(d.racer.name) + '</span>' +
-             '<span class="time">' + fmt(d.ms) + '</span>' +
+             '<span class="time">' + fmt(d.ms) + '</span>' + paceCell(d.ms) +
              '<button class="small secondary" data-undo="' + d.racer.id + '">Undo</button></li>';
     }).join('');
     $('noResults').classList.toggle('hidden', done.length > 0);
@@ -514,7 +593,7 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
 
   $('newEventBtn').addEventListener('click', function () {
     if (!confirm('Start a brand-new event? This erases the current racers and times.')) return;
-    state = { name: '', racers: [], view: 'setup', startedAt: null, stoppedAt: null, finishes: {} };
+    state = { name: '', racers: [], view: 'setup', startedAt: null, stoppedAt: null, finishes: {}, distance: null, distUnit: 'mi', showPace: false, paceUnit: 'min/mi' };
     save();
     $('racerName').value = '';
     $('racerBib').value = '';
@@ -523,12 +602,13 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
   });
 
   $('csvBtn').addEventListener('click', function () {
-    var rows = [['Place', 'Bib', 'Name', 'Time']];
+    var withPace = state.showPace && state.distance;
+    var rows = [['Place', 'Bib', 'Name', 'Time'].concat(withPace ? ['Pace'] : [])];
     standings().forEach(function (d, i) {
-      rows.push([i + 1, d.racer.bib, d.racer.name, fmt(d.ms)]);
+      rows.push([i + 1, d.racer.bib, d.racer.name, fmt(d.ms)].concat(withPace ? [RelayPace.pace(d.ms, state.distance, state.distUnit, state.paceUnit)] : []));
     });
     state.racers.forEach(function (r) {
-      if (state.finishes[r.id] == null) rows.push(['DNF', r.bib, r.name, '']);
+      if (state.finishes[r.id] == null) rows.push(['DNF', r.bib, r.name, ''].concat(withPace ? [''] : []));
     });
     var csv = rows.map(function (row) {
       return row.map(function (cell) {
@@ -566,7 +646,7 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
           state = {
             name: d.state.name, racers: d.state.racers, view: 'race',
             startedAt: d.state.startedAt, stoppedAt: d.state.stoppedAt, finishes: d.state.finishes,
-            raceId: id, publishedAt: null
+            raceId: id, publishedAt: null, distance: d.state.distance, distUnit: d.state.distUnit || 'mi', showPace: !!d.state.showPace, paceUnit: d.state.paceUnit || 'min/mi'
           };
           localStorage.setItem(KEY, JSON.stringify(state));
         }
@@ -593,7 +673,7 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
 
   // "New race" opens timer.html?new=1: start from a blank setup, not the last race on this device
   if (params.has('new')) {
-    state = { name: '', racers: [], view: 'setup', startedAt: null, stoppedAt: null, finishes: {}, raceId: null, publishedAt: null };
+    state = { name: '', racers: [], view: 'setup', startedAt: null, stoppedAt: null, finishes: {}, raceId: null, publishedAt: null, distance: null, distUnit: 'mi', showPace: false, paceUnit: 'min/mi' };
     save();
     history.replaceState(null, '', location.pathname);
   }

@@ -27,7 +27,10 @@ function buildResults(id, owner, race) {
   const dnf = racers
     .filter((r) => times[r.id] == null)
     .map((r) => ({ bib: r.bib, name: r.name }));
-  return { id, owner, name: race.name || "Family race", startedAt: race.startedAt, publishedAt: Date.now(), finished, dnf };
+  return {
+    id, owner, name: race.name || "Family race", startedAt: race.startedAt, publishedAt: Date.now(), finished, dnf,
+    distance: race.distance || null, distUnit: race.distUnit || "mi", showPace: !!race.showPace, paceUnit: race.paceUnit || "min/mi",
+  };
 }
 
 const validState = (state) =>
