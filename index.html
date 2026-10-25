@@ -147,9 +147,9 @@ table.results{table-layout:fixed}
   }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function fmt(ms) {
-    var tenths = Math.floor(ms / 100);
-    var t = tenths % 10;
-    var totalSec = Math.floor(tenths / 10);
+    var hundredths = Math.floor(ms / 10);
+    var t = pad(hundredths % 100);
+    var totalSec = Math.floor(hundredths / 100);
     var s = totalSec % 60;
     var m = Math.floor(totalSec / 60) % 60;
     var h = Math.floor(totalSec / 3600);

@@ -251,9 +251,9 @@ input{font:inherit;padding:10px;border:1px solid #3a3f44;border-radius:8px;width
   function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
   // ms -> "m:ss.t" (or "h:mm:ss.t" past an hour)
   function fmt(ms) {
-    var tenths = Math.floor(ms / 100);
-    var t = tenths % 10;
-    var totalSec = Math.floor(tenths / 10);
+    var hundredths = Math.floor(ms / 10);
+    var t = pad(hundredths % 100);
+    var totalSec = Math.floor(hundredths / 100);
     var s = totalSec % 60;
     var m = Math.floor(totalSec / 60) % 60;
     var h = Math.floor(totalSec / 3600);
