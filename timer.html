@@ -95,16 +95,16 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
             <option value="other">Other</option>
           </select>
         </label>
+      </div>
+      <div id="otherRow" class="details hidden">
+        <label class="field">Distance
+          <input id="distInput" type="number" min="0" step="0.01" placeholder="e.g. 8.5" inputmode="decimal">
+        </label>
         <label class="field">Unit
           <select id="distUnit">
             <option value="mi">Miles</option>
             <option value="km">Kilometers</option>
           </select>
-        </label>
-      </div>
-      <div id="otherRow" class="details hidden">
-        <label class="field">Distance
-          <input id="distInput" type="number" min="0" step="0.01" placeholder="e.g. 8.5" inputmode="decimal">
         </label>
       </div>
       <label class="check"><input type="checkbox" id="showPace"> Show pace</label>
@@ -366,12 +366,14 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
   function readDetails() {
     var preset = $('distPreset').value;
     state.distPreset = preset;
-    state.distUnit = $('distUnit').value;
     if (preset === 'other') {
       var d = parseFloat($('distInput').value);
       state.distance = d > 0 ? d : null;
+      state.distUnit = $('distUnit').value;
     } else {
-      state.distance = RelayPace.presetLength(preset, state.distUnit);
+      var p = RelayPace.PRESETS[preset];
+      state.distance = p ? p.distance : null;
+      state.distUnit = p ? p.unit : 'mi';
     }
     state.showPace = $('showPace').checked;
     state.paceUnit = $('paceUnit').value;

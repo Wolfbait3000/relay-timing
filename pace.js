@@ -11,11 +11,12 @@ var RelayPace = (function () {
   };
 
   // Common race distances, in each unit
+  // Each preset has its own unit: marathons in miles, 5K and 10K in kilometers
   var PRESETS = {
-    'marathon': { label: 'Marathon', mi: 26.2, km: 42.195 },
-    'half': { label: 'Half marathon', mi: 13.1, km: 21.0975 },
-    '5k': { label: '5K', mi: 3.1, km: 5 },
-    '10k': { label: '10K', mi: 6.2, km: 10 }
+    'marathon': { label: 'Marathon', distance: 26.2, unit: 'mi' },
+    'half': { label: 'Half marathon', distance: 13.1, unit: 'mi' },
+    '5k': { label: '5K', distance: 5, unit: 'km' },
+    '10k': { label: '10K', distance: 10, unit: 'km' }
   };
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
@@ -39,12 +40,6 @@ var RelayPace = (function () {
     return mmss(ms / 60000 / inMi(distance, distUnit)) + ' /mi';
   }
 
-  // Race length for a preset key ('marathon', 'half', '5k', '10k') in the chosen unit, or null
-  function presetLength(key, unit) {
-    var p = PRESETS[key];
-    return p ? (unit === 'km' ? p.km : p.mi) : null;
-  }
-
   // " (26.2 mi)" for titles, or '' when there is no race length
   function lengthSuffix(distance, unit) {
     if (!distance) return '';
@@ -59,7 +54,6 @@ var RelayPace = (function () {
     label: label,
     LABELS: LABELS,
     PRESETS: PRESETS,
-    presetLength: presetLength,
     lengthSuffix: lengthSuffix
   };
 })();

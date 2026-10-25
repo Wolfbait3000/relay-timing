@@ -65,16 +65,16 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
             <option value="other">Other</option>
           </select>
         </label>
+      </div>
+      <div id="otherRow" class="details hidden">
+        <label class="field">Distance
+          <input id="distInput" type="number" min="0" step="0.01" placeholder="e.g. 8.5" inputmode="decimal">
+        </label>
         <label class="field">Unit
           <select id="distUnit">
             <option value="mi">Miles</option>
             <option value="km">Kilometers</option>
           </select>
-        </label>
-      </div>
-      <div id="otherRow" class="details hidden">
-        <label class="field">Distance
-          <input id="distInput" type="number" min="0" step="0.01" placeholder="e.g. 8.5" inputmode="decimal">
         </label>
       </div>
       <label class="check"><input type="checkbox" id="showPace"> Show pace</label>
@@ -212,12 +212,15 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
   $('showPace').addEventListener('change', function () {
     $('paceRow').classList.toggle('hidden', !this.checked);
   });
-  function readDistance() {
-    if ($('distPreset').value === 'other') {
+  // Distance and unit for the chosen preset, or the typed distance when Other is chosen
+  function readRace() {
+    var preset = $('distPreset').value;
+    if (preset === 'other') {
       var d = parseFloat($('distInput').value);
-      return d > 0 ? d : null;
+      return { distance: d > 0 ? d : null, unit: $('distUnit').value };
     }
-    return RelayPace.presetLength($('distPreset').value, $('distUnit').value);
+    var p = RelayPace.PRESETS[preset];
+    return { distance: p ? p.distance : null, unit: p ? p.unit : 'mi' };
   }
 
   function load() {
@@ -274,15 +277,16 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
 
     if (error) { $('saveMsg').className = 'msg'; $('saveMsg').textContent = error; return; }
 
+    var race = readRace();
     var next = {
       name: $('raceName').value.trim() || 'Family race',
       racers: racers,
       startedAt: raceState.startedAt || null,
       stoppedAt: raceState.stoppedAt || null,
       finishes: finishes,
-      distance: readDistance(),
+      distance: race.distance,
       distPreset: $('distPreset').value,
-      distUnit: $('distUnit').value,
+      distUnit: race.unit,
       showPace: $('showPace').checked,
       paceUnit: $('paceUnit').value
     };
