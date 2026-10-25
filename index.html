@@ -260,7 +260,7 @@ tr:last-child td{border-bottom:0}
           ? '<span class="tag live">Live</span>'
           : (r.published ? '<span class="tag pub">Published</span>' : '<span class="tag">Finished, not published</span>');
         return '<li>' +
-          '<div class="grow"><h3>' + esc(r.name) + '</h3>' +
+          '<div class="grow"><h3>' + esc(r.name) + esc(RelayPace.lengthSuffix(r.distance, r.distUnit)) + '</h3>' +
           '<p class="date" style="margin:0">' + esc(dateText(r.startedAt || r.updatedAt)) + '</p></div>' +
           status +
           '<div class="row">' +
@@ -310,7 +310,7 @@ tr:last-child td{border-bottom:0}
         }).join(', ') + '</p>'
       : '';
     return '<section class="card">' +
-      '<h2>' + esc(race.name) + '</h2>' +
+      '<h2>' + esc(race.name) + esc(RelayPace.lengthSuffix(race.distance, race.distUnit)) + '</h2>' +
       '<p class="date">' + esc(dateText(race.startedAt || race.publishedAt)) + '</p>' +
       (race.distance ? '<p class="date">Race length: ' + esc(race.distance) + ' ' + (race.distUnit === 'km' ? 'km' : 'miles') + '</p>' : '') +
       (rows ? '<table>' + rows + '</table>' : '<p class="empty">No finishers.</p>') +

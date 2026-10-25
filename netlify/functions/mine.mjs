@@ -21,6 +21,8 @@ export default async (req) => {
     .map((x) => ({
       id: x.id,
       name: x.record.state.name || "Family race",
+      distance: x.record.state.distance || null,
+      distUnit: x.record.state.distUnit || "mi",
       startedAt: x.record.state.startedAt || null,
       stoppedAt: x.record.state.stoppedAt || null,
       updatedAt: x.record.updatedAt || 0,

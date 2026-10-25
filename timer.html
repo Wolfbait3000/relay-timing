@@ -86,13 +86,25 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
       <h2>Race details</h2>
       <div class="details">
         <label class="field">Race length
-          <input id="distInput" type="number" min="0" step="0.01" placeholder="e.g. 5" inputmode="decimal">
+          <select id="distPreset">
+            <option value="">Choose a distance</option>
+            <option value="marathon">Marathon</option>
+            <option value="half">Half marathon</option>
+            <option value="5k">5K</option>
+            <option value="10k">10K</option>
+            <option value="other">Other</option>
+          </select>
         </label>
         <label class="field">Unit
           <select id="distUnit">
             <option value="mi">Miles</option>
             <option value="km">Kilometers</option>
           </select>
+        </label>
+      </div>
+      <div id="otherRow" class="details hidden">
+        <label class="field">Distance
+          <input id="distInput" type="number" min="0" step="0.01" placeholder="e.g. 8.5" inputmode="decimal">
         </label>
       </div>
       <label class="check"><input type="checkbox" id="showPace"> Show pace</label>
@@ -254,7 +266,7 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
   // Only the race data is shared
   function stateForShare() {
     return { name: state.name, racers: state.racers, startedAt: state.startedAt, stoppedAt: state.stoppedAt, finishes: state.finishes,
-      distance: state.distance, distUnit: state.distUnit, showPace: state.showPace, paceUnit: state.paceUnit };
+      distance: state.distance, distPreset: state.distPreset, distUnit: state.distUnit, showPace: state.showPace, paceUnit: state.paceUnit };
   }
 
   // Creates a shared race for the logged-in timekeeper and returns its id
@@ -289,6 +301,7 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
           state.distUnit = data.state.distUnit;
           state.showPace = data.state.showPace;
           state.paceUnit = data.state.paceUnit;
+          state.distPreset = data.state.distPreset;
           state.view = 'race';
           $('setupView').classList.add('hidden');
           $('raceView').classList.remove('hidden');
@@ -339,25 +352,36 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
 
   // ---------- setup view ----------
   // ---------- race details (length and pace) ----------
+  // ---------- race details (length and pace) ----------
   function syncDetailsInputs() {
-    $('distInput').value = state.distance || '';
+    var preset = state.distPreset || (state.distance ? 'other' : '');
+    $('distPreset').value = preset;
+    $('distInput').value = preset === 'other' && state.distance ? state.distance : '';
     $('distUnit').value = state.distUnit || 'mi';
+    $('otherRow').classList.toggle('hidden', preset !== 'other');
     $('showPace').checked = !!state.showPace;
     $('paceUnit').value = state.paceUnit || 'min/mi';
     $('paceRow').classList.toggle('hidden', !state.showPace);
   }
   function readDetails() {
-    var d = parseFloat($('distInput').value);
-    state.distance = d > 0 ? d : null;
+    var preset = $('distPreset').value;
+    state.distPreset = preset;
     state.distUnit = $('distUnit').value;
+    if (preset === 'other') {
+      var d = parseFloat($('distInput').value);
+      state.distance = d > 0 ? d : null;
+    } else {
+      state.distance = RelayPace.presetLength(preset, state.distUnit);
+    }
     state.showPace = $('showPace').checked;
     state.paceUnit = $('paceUnit').value;
+    $('otherRow').classList.toggle('hidden', preset !== 'other');
     $('paceRow').classList.toggle('hidden', !state.showPace);
     save();
     if (state.view === 'race') renderRace();
   }
   $('distInput').addEventListener('input', readDetails);
-  ['distUnit', 'showPace', 'paceUnit'].forEach(function (id) {
+  ['distPreset', 'distUnit', 'showPace', 'paceUnit'].forEach(function (id) {
     $(id).addEventListener('change', readDetails);
   });
   function raceInfoText() {
@@ -646,7 +670,7 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
           state = {
             name: d.state.name, racers: d.state.racers, view: 'race',
             startedAt: d.state.startedAt, stoppedAt: d.state.stoppedAt, finishes: d.state.finishes,
-            raceId: id, publishedAt: null, distance: d.state.distance, distUnit: d.state.distUnit || 'mi', showPace: !!d.state.showPace, paceUnit: d.state.paceUnit || 'min/mi'
+            raceId: id, publishedAt: null, distance: d.state.distance, distPreset: d.state.distPreset, distUnit: d.state.distUnit || 'mi', showPace: !!d.state.showPace, paceUnit: d.state.paceUnit || 'min/mi'
           };
           localStorage.setItem(KEY, JSON.stringify(state));
         }
