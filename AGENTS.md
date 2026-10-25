@@ -31,6 +31,7 @@ A single-page race timer for small family races. The whole app is `index.html` (
 - `GET ?id=` returns `{ state }` for anyone with the link. `POST` (action `create`) makes a race with a timekeeper PIN. `PUT` updates a race and needs the matching PIN.
 - Timekeeper: Continue to race creates the shared race and shows a share link `index.html?race=ID`. Every change is pushed to the server (debounced 500 ms). The PIN is stored only in that device's localStorage and is never sent in the shared state.
 - Viewer: opening `?race=ID` sets `body.viewer`, which hides timekeeper-only controls (anything with class `timekeeper-only`, plus Finish and Undo). It polls the server every 3 seconds and never saves locally.
+- Viewer login: the "Log in as timekeeper" link (class `viewer-only`, shown only in viewer mode) sends `POST {action:"check", id, pin}`. On success it saves the race and PIN on that device and reloads. A device with the matching PIN saved is a timekeeper, not a viewer, so `viewRaceId` is only set when the link's race id does not match the saved one.
 - Keep `package.json` (dependency `@netlify/blobs`) and `netlify.toml` in the repo, since Netlify uses them to install and deploy the function.
 - The function cannot run locally without `netlify dev`. Test the page with stubbed `fetch` as well as on the deployed site.
 

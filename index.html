@@ -24,6 +24,7 @@ button.ghost{background:transparent;color:var(--stop);border:1px solid var(--sto
 button.stop-link{background:none;color:var(--muted);text-decoration:underline;padding:6px 8px;font-size:14px;font-weight:400}
 button.stop-big{background:var(--stop);font-size:20px;padding:16px 28px}
 body.viewer .timekeeper-only,body.viewer [data-finish],body.viewer [data-undo]{display:none!important}
+body:not(.viewer) .viewer-only{display:none!important}
 input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width:100%}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .add-form{display:grid;grid-template-columns:1fr 120px auto;gap:8px;margin-bottom:12px}
@@ -117,6 +118,15 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
       <button id="resetRaceBtn" class="ghost timekeeper-only">Reset race times</button>
       <button id="newEventBtn" class="ghost timekeeper-only">New event</button>
     </div>
+
+    <div class="viewer-only" style="text-align:center;margin-top:18px">
+      <button id="loginLinkBtn" class="stop-link">Log in as timekeeper</button>
+      <div id="loginBox" class="hidden" style="margin-top:8px">
+        <input id="loginPin" type="password" placeholder="Timekeeper PIN" maxlength="20" autocomplete="off" style="max-width:240px;display:inline-block">
+        <button id="loginBtn" class="small">Log in</button>
+        <p id="loginMsg" class="msg" style="text-align:center"></p>
+      </div>
+    </div>
   </section>
 </main>
 
@@ -138,8 +148,10 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
   };
 
   // Viewer mode: opened from a share link (?race=ID). Read-only, refreshes from the server.
+  // A device that already has this race's PIN saved is the timekeeper, not a viewer.
   var params = new URLSearchParams(location.search);
-  var viewRaceId = params.get('race');
+  var linkRaceId = params.get('race');
+  var viewRaceId = linkRaceId && !(state.raceId === linkRaceId && state.pin) ? linkRaceId : null;
   if (viewRaceId) document.body.classList.add('viewer');
 
   var $ = function (id) { return document.getElementById(id); };
@@ -492,6 +504,45 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
     $('headerInfo').innerHTML = '';
     if (raceMode) renderRace(); else renderSetup();
   }
+
+  // Viewer: check the PIN, save this race on this device, then reload as the timekeeper
+  function loginTimekeeper() {
+    var pin = $('loginPin').value.trim();
+    if (!pin) { $('loginMsg').textContent = 'Enter the timekeeper PIN.'; return; }
+    $('loginMsg').textContent = 'Checking...';
+    fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'check', id: viewRaceId, pin: pin })
+    }).then(function (res) {
+      return res.json().then(function (d) {
+        if (!res.ok) throw new Error(d.error || 'Could not log in');
+      });
+    }).then(function () {
+      return fetch(API + '?id=' + encodeURIComponent(viewRaceId), { cache: 'no-store' });
+    }).then(function (res) {
+      return res.json();
+    }).then(function (d) {
+      // This replaces any race previously saved on this device
+      localStorage.setItem(KEY, JSON.stringify({
+        name: d.state.name, racers: d.state.racers, view: 'race',
+        startedAt: d.state.startedAt, stoppedAt: d.state.stoppedAt, finishes: d.state.finishes,
+        raceId: viewRaceId, pin: pin
+      }));
+      location.href = location.pathname + '?race=' + encodeURIComponent(viewRaceId);
+    }).catch(function (err) {
+      $('loginMsg').textContent = err.message;
+    });
+  }
+
+  $('loginLinkBtn').addEventListener('click', function () {
+    $('loginBox').classList.toggle('hidden');
+    $('loginPin').focus();
+  });
+  $('loginBtn').addEventListener('click', loginTimekeeper);
+  $('loginPin').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') loginTimekeeper();
+  });
 
   // Clock keeps running from the saved start time, so a page reload does not lose it
   setInterval(updateClock, 100);

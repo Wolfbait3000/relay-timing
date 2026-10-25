@@ -5,6 +5,7 @@ import { getStore } from "@netlify/blobs";
 // GET  /.netlify/functions/race?id=ABC   -> { state }          (anyone with the link)
 // POST /.netlify/functions/race          -> { id }             body: { action: "create", pin, state }
 // PUT  /.netlify/functions/race          -> { ok: true }       body: { id, pin, state }  (timekeeper only)
+// POST /.netlify/functions/race          -> { ok: true }       body: { action: "check", id, pin }  (PIN check only)
 
 const MAX_STATE_CHARS = 100000;
 
@@ -39,6 +40,15 @@ export default async (req) => {
   }
 
   const pin = String(body.pin || "");
+
+  // Check a PIN without changing anything (used by "Log in as timekeeper")
+  if (req.method === "POST" && body.action === "check") {
+    const record = await store.get(String(body.id || ""), { type: "json" });
+    if (!record) return reply(404, { error: "Race not found" });
+    if (record.pin !== pin) return reply(403, { error: "Wrong timekeeper PIN" });
+    return reply(200, { ok: true });
+  }
+
   if (!body.state || typeof body.state !== "object") {
     return reply(400, { error: "Missing race data" });
   }
