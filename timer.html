@@ -591,6 +591,13 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
   // Clock keeps running from the saved start time, so a page reload does not lose it
   setInterval(updateClock, 100);
 
+  // "New race" opens timer.html?new=1: start from a blank setup, not the last race on this device
+  if (params.has('new')) {
+    state = { name: '', racers: [], view: 'setup', startedAt: null, stoppedAt: null, finishes: {}, raceId: null, publishedAt: null };
+    save();
+    history.replaceState(null, '', location.pathname);
+  }
+
   if (linkRaceId) {
     startWithLink(linkRaceId);
   } else {
