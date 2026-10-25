@@ -6,23 +6,25 @@
 <title>Relay Timing</title>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <style>
-:root{--bg:#f4f6f8;--card:#fff;--ink:#1d2430;--muted:#6b7585;--accent:#1f6feb;--stop:#d1242f;--line:#dde2e8;--gold:#c99a06;--silver:#8b949e;--bronze:#b5651d}
+@font-face{font-family:"Timer";src:url("fonts/LiberationMono-PlainZero-Bold.ttf") format("truetype");font-display:swap}
+:root{--bg:#111314;--card:#1a1d1f;--ink:#F2F1EC;--muted:#A1A39A;--label:#D8A37B;--accent:#FFF200;--clock:#FFF200;--go:#2da44e;--stop:#e5534b;--line:#2a2e31;--gold:#E6B800;--silver:#c9c7bf;--bronze:#D8A37B}
 *{box-sizing:border-box}
+a{color:#D8A37B}
 body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
-header{background:var(--ink);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+header{background:#1a1d1f;color:#F2F1EC;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 header h1{font-size:20px;margin:0}
 main{max-width:860px;margin:0 auto;padding:20px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}
-h2{font-size:18px;margin:0 0 8px}
+h2{color:var(--label);font-size:18px;margin:0 0 8px}
 h3{font-size:16px;margin:0 0 4px}
 .sub{color:var(--muted);font-size:14px;margin:0 0 12px}
-button{font:inherit;border:0;border-radius:8px;padding:10px 16px;cursor:pointer;background:var(--accent);color:#fff}
+button{font:inherit;border:0;border-radius:8px;padding:10px 16px;cursor:pointer;background:var(--accent);color:#111314}
 button:disabled{opacity:.4;cursor:not-allowed}
-button.secondary{background:#e6eaf0;color:var(--ink)}
+button.secondary{background:#262a2d;color:var(--ink)}
 button.ghost{background:transparent;color:var(--stop);border:1px solid var(--stop)}
 button.big{font-size:20px;padding:22px;width:100%}
 button.small{padding:6px 10px;font-size:14px}
-input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width:100%}
+input{font:inherit;padding:10px;border:1px solid #3a3f44;border-radius:8px;width:100%;background:#111314;color:#F2F1EC}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .msg{color:var(--stop);min-height:20px;font-size:14px;margin:8px 0 0}
@@ -31,20 +33,20 @@ input{font:inherit;padding:10px;border:1px solid #c4cbd5;border-radius:8px;width
 .list{list-style:none;padding:0;margin:0}
 .list li{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .list li:last-child{border-bottom:0}
-.tag{font-size:12px;border-radius:999px;padding:3px 9px;background:#e6eaf0;color:var(--muted)}
-.tag.live{background:#dcfce7;color:#166534}
-.tag.pub{background:#dbeafe;color:#1e40af}
+.tag{font-size:12px;border-radius:999px;padding:3px 9px;background:#262a2d;color:var(--muted)}
+.tag.live{background:#16321f;color:#7ee2a0}
+.tag.pub{background:#1d2a40;color:#9cc2ff}
 .grow{flex:1;min-width:160px}
 .date{color:var(--muted);font-size:14px;margin:0 0 10px}
 table{width:100%;border-collapse:collapse}
 td{padding:9px 6px;border-bottom:1px solid var(--line);font-size:16px}
 tr:last-child td{border-bottom:0}
-.place{width:44px;height:44px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;color:#fff;background:var(--muted)}
+.place{width:44px;height:44px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;color:#111314;background:var(--muted)}
 .p1{background:var(--gold)!important}
 .p2{background:var(--silver)!important}
 .p3{background:var(--bronze)!important}
-.bib{background:var(--ink);color:#fff;border-radius:6px;padding:3px 8px;font-weight:700;font-size:14px}
-.time{font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
+.bib{background:#262a2d;color:#F2F1EC;border-radius:6px;padding:3px 8px;font-weight:700;font-size:14px}
+.time{font-family:"Timer",monospace;font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
 .dnf{color:var(--muted);font-size:14px;margin:12px 0 0}
 .event{margin-bottom:6px}
 table.results{table-layout:fixed}
@@ -57,7 +59,7 @@ table.results{table-layout:fixed}
 </head>
 <body>
 <header>
-  <h1 style="display:flex;align-items:center;gap:10px"><img src="logo.svg" alt="" width="28" height="28" style="background:#fff;border-radius:7px;padding:3px"> Relay Timing</h1>
+  <h1 style="display:flex;align-items:center;gap:10px"><img src="logo.svg" alt="" width="28" height="28" style="border-radius:7px"> Relay Timing</h1>
   <div id="whoBox" class="row hidden"><span id="whoName" style="font-size:14px"></span><button id="logoutBtn" class="small secondary">Log out</button></div>
 </header>
 

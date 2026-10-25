@@ -6,27 +6,29 @@
 <title>Edit race · Relay Timing</title>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <style>
-:root{--bg:#f4f6f8;--card:#fff;--ink:#1d2430;--muted:#6b7585;--accent:#1f6feb;--stop:#d1242f;--line:#dde2e8;--good:#166534}
+@font-face{font-family:"Timer";src:url("fonts/LiberationMono-PlainZero-Bold.ttf") format("truetype");font-display:swap}
+:root{--bg:#111314;--card:#1a1d1f;--ink:#F2F1EC;--muted:#A1A39A;--label:#D8A37B;--accent:#FFF200;--clock:#FFF200;--go:#2da44e;--stop:#e5534b;--line:#2a2e31;--gold:#E6B800;--silver:#c9c7bf;--bronze:#D8A37B}
 *{box-sizing:border-box}
+a{color:#D8A37B}
 body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
-header{background:var(--ink);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+header{background:#1a1d1f;color:#F2F1EC;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 header h1{font-size:20px;margin:0;display:flex;align-items:center;gap:10px}
 header a{color:#fff;font-size:14px}
 main{max-width:860px;margin:0 auto;padding:20px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:18px}
-h2{font-size:18px;margin:0 0 12px}
-h3{font-size:13px;margin:0 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+h2{color:var(--label);font-size:18px;margin:0 0 12px}
+h3{font-size:13px;margin:0 0 8px;color:var(--label);text-transform:uppercase;letter-spacing:.04em}
 .sub{color:var(--muted);font-size:14px;margin:0 0 12px}
-button{font:inherit;border:0;border-radius:8px;padding:10px 16px;cursor:pointer;background:var(--accent);color:#fff}
+button{font:inherit;border:0;border-radius:8px;padding:10px 16px;cursor:pointer;background:var(--accent);color:#111314}
 button:disabled{opacity:.4;cursor:not-allowed}
-button.secondary{background:#e6eaf0;color:var(--ink)}
+button.secondary{background:#262a2d;color:var(--ink)}
 button.ghost{background:transparent;color:var(--stop);border:1px solid var(--stop)}
 button.small{padding:6px 10px;font-size:14px}
-button.on{background:var(--accent);color:#fff}
+button.on{background:var(--accent);color:#111314}
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-.tabs button{background:#e6eaf0;color:var(--ink)}
-.tabs button.on{background:var(--accent);color:#fff}
-input{font:inherit;padding:9px;border:1px solid #c4cbd5;border-radius:8px;width:100%}
+.tabs button{background:#262a2d;color:var(--ink)}
+.tabs button.on{background:var(--accent);color:#111314}
+input{font:inherit;padding:9px;border:1px solid #3a3f44;border-radius:8px;width:100%;background:#111314;color:#F2F1EC}
 table{width:100%;border-collapse:collapse}
 th{text-align:left;font-size:13px;color:var(--muted);font-weight:600;padding:0 6px 8px}
 td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
@@ -35,16 +37,16 @@ td{padding:6px;border-top:1px solid var(--line);vertical-align:middle}
 .ok{color:var(--good)}
 .hidden{display:none!important}
 .details{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
-.field{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted);flex:1;min-width:140px}
-.field input,.field select{font:inherit;color:var(--ink);padding:9px;border:1px solid #c4cbd5;border-radius:8px;width:100%;background:#fff}
-.field select{-webkit-appearance:none;appearance:none;padding-right:42px;background-color:#fff;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%231d2430' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;background-size:12px 8px}
+.field{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--label);flex:1;min-width:140px}
+.field input,.field select{font:inherit;color:var(--ink);padding:9px;border:1px solid #3a3f44;border-radius:8px;width:100%;background:#111314}
+.field select{-webkit-appearance:none;appearance:none;padding-right:42px;background-color:#111314;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23D8A37B' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;background-size:12px 8px}
 .check{display:flex;align-items:center;gap:8px;font-size:15px;margin-bottom:10px}
 .check input{width:auto;margin:0}
 </style>
 </head>
 <body>
 <header>
-  <h1><img src="logo.svg" alt="" width="26" height="26" style="background:#fff;border-radius:7px;padding:3px"> Edit race</h1>
+  <h1><img src="logo.svg" alt="" width="26" height="26" style="border-radius:7px"> Edit race</h1>
   <a href="index.html">Home</a>
 </header>
 
