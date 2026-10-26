@@ -67,13 +67,18 @@ input{font:inherit;padding:10px;border:1px solid #3a3f44;border-radius:8px;width
 .check{display:flex;align-items:center;gap:8px;font-size:15px;margin-bottom:10px}
 .check input{width:auto;margin:0}
 @media (max-width:600px){header{grid-template-columns:1fr}header h1,#headerInfo,header a{justify-self:center}.add-form{grid-template-columns:1fr 90px}.add-form button{grid-column:1/-1}.clock{font-size:52px}.seg{flex-direction:column}}
+.bib-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:flex-start;justify-content:center;padding:10vh 16px 16px;z-index:10}
+.bib-box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;width:min(480px,100%)}
+#bibInput{font-family:"Timer",monospace;font-size:56px;font-weight:700;text-align:center;color:var(--clock);background:#111314;border:1px solid #3a3f44;border-radius:10px;padding:10px;letter-spacing:.05em}
+.bib-hit{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.bib-hit:last-child{border-bottom:0}
+.bib-hit .name{flex:1}
 </style>
 </head>
 <body>
 <header>
-  <h1><img src="logo.svg" alt="" width="28" height="28" style="border-radius:7px"> Relay Timing <span style="font-size:12px;font-weight:400;opacity:.7">v1.9</span></h1>
+  <h1 style="display:flex;align-items:center;gap:10px"><a href="index.html" title="Home" style="display:flex;align-items:center;gap:10px;color:inherit;text-decoration:none;justify-self:start"><img src="logo.svg" alt="" width="28" height="28" style="border-radius:7px"> Relay Timing</a> <span style="font-size:12px;font-weight:400;opacity:.7">v1.9</span></h1>
   <div id="headerInfo" class="row"></div>
-  <a href="index.html">Home</a>
 </header>
 
 <main>
@@ -201,6 +206,7 @@ input{font:inherit;padding:10px;border:1px solid #3a3f44;border-radius:8px;width
       </div>
     </div>
 
+    <p id="finishMsg" class="hidden" style="color:#7ee2a0;font-weight:600;text-align:center;margin:0 0 12px"></p>
     <div class="card">
       <h2>Results</h2>
       <ul id="resultsList" class="list"></ul>
@@ -208,7 +214,7 @@ input{font:inherit;padding:10px;border:1px solid #3a3f44;border-radius:8px;width
     </div>
 
     <div class="card">
-      <h2 id="runningTitle">Still on course</h2>
+      <div class="row" style="justify-content:space-between;margin-bottom:12px"><h2 id="runningTitle" style="margin:0">Still on course</h2><button id="bibBtn" class="small secondary timekeeper-only">Enter bib</button></div>
       <ul id="runningList" class="list"></ul>
       <p id="noRunning" class="empty"></p>
     </div>
@@ -225,6 +231,16 @@ input{font:inherit;padding:10px;border:1px solid #3a3f44;border-radius:8px;width
     </div>
   </section>
 </main>
+
+<div id="bibModal" class="bib-overlay hidden" role="dialog" aria-label="Enter bib">
+  <div class="bib-box">
+    <p id="bibEvent" class="sub" style="margin:0 0 8px"></p>
+    <input id="bibInput" inputmode="numeric" autocomplete="off" aria-label="Bib number">
+    <div id="bibHits" style="margin-top:12px"></div>
+    <p id="bibError" class="msg" style="margin-top:10px"></p>
+    <p class="sub" style="margin:10px 0 0">Enter marks the runner. Esc closes.</p>
+  </div>
+</div>
 
 <script src="pace.js"></script>
 <script>
@@ -757,6 +773,7 @@ input{font:inherit;padding:10px;border:1px solid #3a3f44;border-radius:8px;width
       : '';
     $('raceHint').classList.toggle('hidden', stopped(e));
     $('runningTitle').textContent = stopped(e) ? 'Did not finish' : 'Still on course';
+    $('bibBtn').disabled = !(started(e) && !stopped(e));
     $('shareBox').classList.toggle('hidden', !state.raceId || !!viewRaceId);
     $('shareLink').textContent = state.raceId ? location.origin + location.pathname + '?race=' + state.raceId : '';
     $('publishBox').classList.toggle('hidden', !(allStopped() && state.raceId && !viewRaceId));
@@ -923,6 +940,120 @@ input{font:inherit;padding:10px;border:1px solid #3a3f44;border-radius:8px;width
     document.body.appendChild(a);
     a.click();
     a.remove();
+  });
+
+  // ---------- enter bib (type a bib number to mark a runner) ----------
+  var flashTimer = null;
+
+  function bibIsOpen() { return !$('bibModal').classList.contains('hidden'); }
+
+  function bibOpen(initial) {
+    var e = ev();
+    if (!e || !started(e) || stopped(e) || viewRaceId) return;
+    $('bibEvent').textContent = (state.name || 'Race') + ' · ' + eventTitle(e, state.active);
+    $('bibInput').value = initial || '';
+    $('bibError').textContent = '';
+    $('bibModal').classList.remove('hidden');
+    $('bibInput').focus();
+    $('bibInput').setSelectionRange($('bibInput').value.length, $('bibInput').value.length);
+    bibRender();
+  }
+
+  function bibClose() {
+    $('bibModal').classList.add('hidden');
+    $('bibError').textContent = '';
+  }
+
+  // Racers in the active event whose bib starts with the typed digits
+  function bibHits(q) {
+    var needle = String(q).trim().toLowerCase();
+    if (!needle) return [];
+    return ev().racers.filter(function (r) { return String(r.bib).toLowerCase().indexOf(needle) === 0; });
+  }
+
+  function bibRender() {
+    var e = ev();
+    var q = $('bibInput').value.trim();
+    var hits = bibHits(q);
+    $('bibHits').innerHTML = hits.map(function (r) {
+      var done = e.finishes[r.id] != null;
+      return '<div class="bib-hit" data-hit="' + esc(r.id) + '"><span class="bib">#' + esc(r.bib) + '</span>' +
+             '<span class="name">' + esc(r.name) + '</span>' +
+             '<span class="sub" style="margin:0">' + (done ? 'Finished' : 'Still out') + '</span></div>';
+    }).join('') || (q
+      ? '<p class="empty">No bib starts with ' + esc(q) + '.</p>'
+      : '<p class="empty">Type a bib number.</p>');
+  }
+
+  function bibFinish(r) {
+    var e = ev();
+    if (e.finishes[r.id] != null) {
+      $('bibError').textContent = 'Bib #' + r.bib + ' (' + r.name + ') is already finished.';
+      return;
+    }
+    e.finishes[r.id] = elapsed(e);
+    save();
+    bibClose();
+    renderRace();
+    flashFinish('Marked Bib #' + r.bib + ' (' + r.name + ') as \'Finished\'');
+  }
+
+  // Exact bib wins (324 over 3241). Otherwise only a single unfinished match is used.
+  function bibEnter() {
+    var q = $('bibInput').value.trim();
+    if (!q) return;
+    var e = ev();
+    var exact = e.racers.filter(function (r) { return String(r.bib).toLowerCase() === q.toLowerCase(); })[0];
+    if (exact) return bibFinish(exact);
+    var hits = bibHits(q);
+    var open = hits.filter(function (r) { return e.finishes[r.id] == null; });
+    if (open.length === 1) return bibFinish(open[0]);
+    if (open.length > 1) {
+      $('bibError').textContent = 'More than one runner starts with ' + q + '. Keep typing or tap a name.';
+      return;
+    }
+    $('bibError').textContent = hits.length
+      ? 'Everyone with a bib starting ' + q + ' is already finished.'
+      : 'No runner has a bib starting with ' + q + '.';
+  }
+
+  function flashFinish(text) {
+    $('finishMsg').textContent = text;
+    $('finishMsg').classList.remove('hidden');
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(function () { $('finishMsg').classList.add('hidden'); }, 5000);
+  }
+
+  $('bibInput').addEventListener('input', bibRender);
+  $('bibInput').addEventListener('keydown', function (evt) {
+    if (evt.key === 'Enter') { evt.preventDefault(); bibEnter(); }
+    else if (evt.key === 'Escape') { bibClose(); }
+  });
+  $('bibHits').addEventListener('click', function (evt) {
+    var row = evt.target.closest('[data-hit]');
+    if (!row) return;
+    var r = ev().racers.filter(function (x) { return x.id === row.getAttribute('data-hit'); })[0];
+    if (r) bibFinish(r);
+  });
+  $('bibModal').addEventListener('click', function (evt) {
+    if (evt.target === $('bibModal')) bibClose();
+  });
+  $('bibBtn').addEventListener('click', function () { bibOpen(''); });
+
+  // Typing a number on a computer opens the modal, unless a text box already has focus
+  document.addEventListener('keydown', function (evt) {
+    if (bibIsOpen()) {
+      if (evt.key === 'Escape') bibClose();
+      return;
+    }
+    if (evt.ctrlKey || evt.metaKey || evt.altKey || !/^[0-9]$/.test(evt.key)) return;
+    if ($('raceView').classList.contains('hidden')) return;
+    var t = document.activeElement;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    var e = ev();
+    if (!e || !started(e) || stopped(e) || viewRaceId) return;
+    evt.preventDefault();
+    bibOpen(evt.key);
   });
 
   // ---------- views ----------
