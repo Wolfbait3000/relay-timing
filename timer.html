@@ -150,6 +150,7 @@ input{font:inherit;padding:10px;border:1px solid #3a3f44;border-radius:8px;width
           <select id="distUnit">
             <option value="mi">Miles</option>
             <option value="km">Kilometers</option>
+            <option value="m">Meters</option>
           </select>
         </label>
       </div>
@@ -541,7 +542,7 @@ input{font:inherit;padding:10px;border:1px solid #3a3f44;border-radius:8px;width
 
   function renderEventList() {
     $('eventList').innerHTML = state.events.map(function (e, i) {
-      var len = e.distance ? (+Number(e.distance).toFixed(2)) + ' ' + (e.distUnit === 'km' ? 'km' : 'mi') : 'no length set';
+      var len = e.distance ? (+Number(e.distance).toFixed(2)) + ' ' + RelayPace.unitLabel(e.distUnit) : 'no length set';
       return '<li><div class="grow"><h3 style="margin:0;text-transform:none;letter-spacing:0;font-size:16px;color:var(--ink)">' +
              esc(eventTitle(e, i)) + '</h3>' +
              '<p class="sub" style="margin:2px 0 0">' + e.racers.length + ' racer' + (e.racers.length === 1 ? '' : 's') + ' · ' + esc(len) + '</p></div>' +
@@ -732,7 +733,7 @@ input{font:inherit;padding:10px;border:1px solid #3a3f44;border-radius:8px;width
   // ---------- race view ----------
   function raceInfoText(e) {
     if (!e.distance) return e.showPace ? 'Add a race length to show pace.' : '';
-    var unit = e.distUnit === 'km' ? 'km' : 'miles';
+    var unit = RelayPace.unitWord(e.distUnit);
     return 'Race length: ' + e.distance + ' ' + unit + (e.showPace ? ' · pace in ' + RelayPace.label(e.paceUnit) : '');
   }
   function paceCell(e, ms) {

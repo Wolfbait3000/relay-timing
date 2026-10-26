@@ -27,8 +27,13 @@ var RelayPace = (function () {
     return Math.floor(total / 60) + ':' + pad(total % 60);
   }
 
-  function inKm(d, unit) { return unit === 'km' ? d : d * MI_TO_KM; }
-  function inMi(d, unit) { return unit === 'km' ? d / MI_TO_KM : d; }
+  function inKm(d, unit) { return unit === 'km' ? d : unit === 'm' ? d / 1000 : d * MI_TO_KM; }
+  function inMi(d, unit) { return unit === 'km' ? d / MI_TO_KM : unit === 'm' ? d / (MI_TO_KM * 1000) : d; }
+
+  // Short unit for titles: mi, km, or m
+  function unitLabel(unit) { return unit === 'km' ? 'km' : unit === 'm' ? 'm' : 'mi'; }
+  // Spoken unit for sentences: miles, kilometers, or meters
+  function unitWord(unit) { return unit === 'km' ? 'kilometers' : unit === 'm' ? 'meters' : 'miles'; }
 
   // Pace text for one finish time, or '' when there is no race length
   function pace(ms, distance, distUnit, paceUnit) {
@@ -43,7 +48,7 @@ var RelayPace = (function () {
   // " (26.2 mi)" for titles, or '' when there is no race length
   function lengthSuffix(distance, unit) {
     if (!distance) return '';
-    return ' (' + (+Number(distance).toFixed(2)) + ' ' + (unit === 'km' ? 'km' : 'mi') + ')';
+    return ' (' + (+Number(distance).toFixed(2)) + ' ' + unitLabel(unit) + ')';
   }
 
   function label(unit) { return LABELS[unit] || unit; }
@@ -73,6 +78,8 @@ var RelayPace = (function () {
     LABELS: LABELS,
     PRESETS: PRESETS,
     lengthSuffix: lengthSuffix,
+    unitLabel: unitLabel,
+    unitWord: unitWord,
     eventsOf: eventsOf
   };
 })();
